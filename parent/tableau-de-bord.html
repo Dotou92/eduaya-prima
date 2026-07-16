@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mes enfants — Espace Parent</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Parent</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1 id="titre-bienvenue">Bonjour 👋</h1>
+        <a href="/parent/lier-enfant.html" class="bouton bouton-accent">+ Lier un enfant</a>
+      </div>
+      <div id="liste-enfants" class="grille"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("parent");
+    if (contexte) {
+      initLayout({ role: "parent", actif: "tableau-de-bord", profile: contexte.profile });
+      document.getElementById("titre-bienvenue").textContent = `Bonjour ${contexte.profile.prenom} 👋`;
+
+      const { data: liens, error } = await supabase
+        .from("parent_enfant")
+        .select("enfant_id, profiles!parent_enfant_enfant_id_fkey(prenom, niveau_id, niveaux(code))")
+        .eq("parent_id", contexte.user.id);
+
+      const conteneur = document.getElementById("liste-enfants");
+      if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; }
+      else if (!liens || liens.length === 0) {
+        conteneur.innerHTML = `<div class="vide">Aucun enfant lié pour l'instant. <a href="/parent/lier-enfant.html">Liez-en un</a>.</div>`;
+      } else {
+        const enfants = liens.map(l => l.profiles ? { id: l.enfant_id, ...l.profiles } : null).filter(Boolean);
+        const resultats = await Promise.all(enfants.map(async (enfant) => {
+          const { data: tentatives } = await supabase.from("tentatives").select("score, score_max").eq("eleve_id", enfant.id);
+          const totalScore = (tentatives || []).reduce((s, t) => s + Number(t.score), 0);
+          const totalMax = (tentatives || []).reduce((s, t) => s + Number(t.score_max), 0);
+          const pourcentage = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : null;
+          return { ...enfant, nbTentatives: tentatives?.length || 0, pourcentage };
+        }));
+
+        conteneur.innerHTML = resultats.map(e => `
+          <a class="carte carte-lien" href="/parent/enfant.html?id=${e.id}">
+            <span class="pastille pastille-vert">${e.niveaux?.code || ""}</span>
+            <h3>${echapperHtml(e.prenom)}</h3>
+            <p class="mb-0 texte-att">${e.nbTentatives} exercice(s) fait(s)${e.pourcentage !== null ? ` — ${e.pourcentage}% de réussite` : ""}</p>
+          </a>
+        `).join("");
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Exercice — Écolier</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion — ton résultat sera envoyé dès que possible.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Écolier</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="conteneur-etroit" style="padding:0;">
+        <h1 id="titre-exercice">Exercice</h1>
+        <div class="carte" id="zone-exercice"><p class="texte-att">Chargement…</p></div>
+        <div id="zone-resultat" style="display:none;"></div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, parametreUrl, afficherToast } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+    import { obtenirExerciceHorsLigne, mettreTentativeEnAttente } from "/js/offline-db.js";
+    import { corriger, melanger } from "/js/exercises.js";
+
+    const exerciceId = parametreUrl("id");
+    const leconId = parametreUrl("lecon");
+    const devoirId = parametreUrl("devoir");
+    const contexte = await exigerRole("ecolier");
+
+    if (contexte && exerciceId) {
+      initLayout({ role: "ecolier", actif: "tableau-de-bord", profile: contexte.profile });
+
+      let exercice;
+      if (navigator.onLine) {
+        const { data } = await supabase.from("exercices").select("*").eq("id", exerciceId).single();
+        exercice = data;
+      } else {
+        exercice = await obtenirExerciceHorsLigne(exerciceId);
+      }
+
+      const zone = document.getElementById("zone-exercice");
+      if (!exercice) {
+        zone.innerHTML = `<p>Exercice non disponible hors-ligne.</p>`;
+      } else {
+        document.getElementById("titre-exercice").textContent = exercice.titre;
+        const dateDebut = new Date();
+        zone.innerHTML = rendreExercice(exercice.contenu);
+        if (exercice.contenu.type === "association") preparerAssociation(exercice.contenu);
+
+        const boutonCorriger = document.createElement("button");
+        boutonCorriger.className = "bouton bouton-primaire bouton-bloc bouton-grand";
+        boutonCorriger.textContent = "Corriger";
+        boutonCorriger.style.marginTop = "1rem";
+        zone.appendChild(boutonCorriger);
+
+        boutonCorriger.addEventListener("click", async () => {
+          const reponse = lireReponse(exercice.contenu);
+          const resultat = corriger(exercice.contenu, reponse);
+          afficherCorrections(exercice.contenu, resultat);
+          boutonCorriger.disabled = true;
+
+          const tentative = {
+            client_uuid: crypto.randomUUID(),
+            eleve_id: contexte.user.id,
+            exercice_id: exerciceId,
+            devoir_id: devoirId || null,
+            reponses: reponse,
+            score: resultat.score,
+            score_max: resultat.max,
+            temps_passe_secondes: Math.round((Date.now() - dateDebut.getTime()) / 1000),
+            date_debut: dateDebut.toISOString(),
+          };
+
+          if (navigator.onLine) {
+            const { error } = await supabase.from("tentatives").insert({ ...tentative, source: "en_ligne" });
+            if (error) {
+              await mettreTentativeEnAttente(tentative);
+              afficherToast("Connexion instable : résultat mis en attente d'envoi.", "info");
+            }
+          } else {
+            await mettreTentativeEnAttente(tentative);
+            afficherToast("Hors-ligne : ton résultat sera envoyé dès le retour de la connexion.", "info");
+          }
+
+          document.getElementById("zone-resultat").style.display = "block";
+          document.getElementById("zone-resultat").innerHTML = `
+            <div class="carte texte-centre" style="margin-top:1rem;">
+              <h2>${resultat.score} / ${resultat.max}</h2>
+              <p>${resultat.score === resultat.max ? "Excellent, sans faute ! 🎉" : "Continue comme ça ! 💪"}</p>
+              <div class="flex gap-1" style="justify-content:center;">
+                ${leconId ? `<a class="bouton bouton-primaire" href="/ecolier/lecon.html?id=${leconId}">Retour à la leçon</a>` : `<a class="bouton bouton-primaire" href="/ecolier/tableau-de-bord.html">Terminé</a>`}
+              </div>
+            </div>
+          `;
+        });
+      }
+    }
+
+    // ---------- Rendu par type d'exercice ----------
+
+    function rendreExercice(contenu) {
+      switch (contenu.type) {
+        case "qcm": return rendreQcm(contenu);
+        case "texte_a_trous": return rendreTexteATrous(contenu);
+        case "association": return rendreAssociation(contenu);
+        case "vrai_faux": return rendreVraiFaux(contenu);
+        default: return `<p>Type d'exercice non pris en charge.</p>`;
+      }
+    }
+
+    function rendreQcm(contenu) {
+      const type = contenu.multiple ? "checkbox" : "radio";
+      return `
+        <p style="font-weight:700; font-size:1.1rem;">${echapperHtml(contenu.question)}</p>
+        <div id="qcm-choix">
+          ${contenu.choix.map(c => `
+            <label class="chip-choix" data-id="${c.id}">
+              <input type="${type}" name="qcm" value="${c.id}" style="margin-right:0.5rem;" />
+              ${echapperHtml(c.texte)}
+            </label>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function rendreTexteATrous(contenu) {
+      const html = echapperHtml(contenu.texte).replace(/\{\{(\w+)\}\}/g,
+        (_, id) => `<input type="text" class="trou-input" data-id="${id}" style="width:120px;display:inline-block;padding:0.35rem 0.5rem;border-radius:6px;border:1.5px solid var(--couleur-bordure);font:inherit;" />`);
+      return `<p style="font-size:1.1rem; line-height:2.2;">${html}</p>`;
+    }
+
+    function rendreAssociation(contenu) {
+      return `
+        <div id="assoc-lignes">
+          ${contenu.paires.map(p => `
+            <div class="flex items-center gap-2" style="margin-bottom:0.75rem;">
+              <div style="flex:1; font-weight:600;">${echapperHtml(p.gauche)}</div>
+              <select class="assoc-select" data-id="${p.id}" style="flex:1; padding:0.5rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);"></select>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function preparerAssociation(contenu) {
+      const optionsDroite = melanger(contenu.paires.map(p => ({ id: p.id, texte: p.droite })));
+      document.querySelectorAll(".assoc-select").forEach(select => {
+        select.innerHTML = `<option value="">— choisir —</option>` +
+          optionsDroite.map(o => `<option value="${o.id}">${echapperHtml(o.texte)}</option>`).join("");
+      });
+    }
+
+    function rendreVraiFaux(contenu) {
+      return `
+        <p style="font-weight:700; font-size:1.1rem;">${echapperHtml(contenu.affirmation)}</p>
+        <div class="flex gap-2">
+          <label class="chip-choix" style="flex:1; text-align:center;" data-valeur="true">
+            <input type="radio" name="vf" value="true" style="margin-right:0.5rem;" /> Vrai
+          </label>
+          <label class="chip-choix" style="flex:1; text-align:center;" data-valeur="false">
+            <input type="radio" name="vf" value="false" style="margin-right:0.5rem;" /> Faux
+          </label>
+        </div>
+      `;
+    }
+
+    // ---------- Lecture de la réponse saisie ----------
+
+    function lireReponse(contenu) {
+      if (contenu.type === "qcm") {
+        const selection = [...document.querySelectorAll('input[name="qcm"]:checked')].map(i => i.value);
+        return { selection };
+      }
+      if (contenu.type === "texte_a_trous") {
+        const valeurs = {};
+        document.querySelectorAll(".trou-input").forEach(i => valeurs[i.dataset.id] = i.value);
+        return { valeurs };
+      }
+      if (contenu.type === "association") {
+        const associations = {};
+        document.querySelectorAll(".assoc-select").forEach(s => associations[s.dataset.id] = s.value);
+        return { associations };
+      }
+      if (contenu.type === "vrai_faux") {
+        const coche = document.querySelector('input[name="vf"]:checked');
+        return { valeur: coche ? coche.value === "true" : null };
+      }
+    }
+
+    // ---------- Affichage visuel des corrections ----------
+
+    function afficherCorrections(contenu, resultat) {
+      if (contenu.type === "qcm") {
+        document.querySelectorAll("#qcm-choix label").forEach(label => {
+          const id = label.dataset.id;
+          label.classList.add(resultat.corrections[id] ? "correct" : "incorrect");
+          label.querySelector("input").disabled = true;
+        });
+      } else if (contenu.type === "texte_a_trous") {
+        document.querySelectorAll(".trou-input").forEach(input => {
+          input.disabled = true;
+          input.style.borderColor = resultat.corrections[input.dataset.id] ? "var(--couleur-succes)" : "var(--couleur-alerte)";
+        });
+      } else if (contenu.type === "association") {
+        document.querySelectorAll(".assoc-select").forEach(select => {
+          select.disabled = true;
+          select.style.borderColor = resultat.corrections[select.dataset.id] ? "var(--couleur-succes)" : "var(--couleur-alerte)";
+        });
+      } else if (contenu.type === "vrai_faux") {
+        document.querySelectorAll('input[name="vf"]').forEach(i => i.disabled = true);
+        document.querySelectorAll(".chip-choix").forEach(label => {
+          const estBon = resultat.corrections.unique;
+          const estChoisi = label.querySelector("input").checked;
+          if (estChoisi) label.classList.add(estBon ? "correct" : "incorrect");
+        });
+      }
+    }
+  </script>
+</body>
+</html>

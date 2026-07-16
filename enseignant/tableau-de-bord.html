@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tableau de bord — Espace Enseignant</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Enseignant</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1 id="titre-bienvenue">Bonjour 👋</h1>
+      </div>
+
+      <div class="grille" style="margin-bottom: 2rem;">
+        <div class="carte">
+          <div class="texte-att">Classes</div>
+          <h2 id="stat-classes" class="mt-0 mb-0">—</h2>
+        </div>
+        <div class="carte">
+          <div class="texte-att">Élèves suivis</div>
+          <h2 id="stat-eleves" class="mt-0 mb-0">—</h2>
+        </div>
+        <div class="carte">
+          <div class="texte-att">Leçons créées</div>
+          <h2 id="stat-lecons" class="mt-0 mb-0">—</h2>
+        </div>
+      </div>
+
+      <div class="entete-page">
+        <h2 class="mb-0">Mes classes</h2>
+        <a href="/enseignant/classes.html" class="bouton bouton-primaire">Gérer mes classes</a>
+      </div>
+      <div id="liste-classes" class="grille"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("enseignant");
+    if (contexte) {
+      initLayout({ role: "enseignant", actif: "tableau-de-bord", profile: contexte.profile });
+      document.getElementById("titre-bienvenue").textContent = `Bonjour ${contexte.profile.prenom} 👋`;
+
+      const { data: classes } = await supabase.from("classes").select("id, nom, niveau_id, code_invitation").eq("enseignant_id", contexte.user.id);
+      const { count: nbEleves } = await supabase
+        .from("classe_eleves")
+        .select("eleve_id", { count: "exact", head: true })
+        .in("classe_id", (classes || []).map(c => c.id).length ? (classes || []).map(c => c.id) : ["00000000-0000-0000-0000-000000000000"]);
+      const { count: nbLecons } = await supabase.from("lecons").select("id", { count: "exact", head: true }).eq("auteur_id", contexte.user.id);
+
+      document.getElementById("stat-classes").textContent = classes?.length ?? 0;
+      document.getElementById("stat-eleves").textContent = nbEleves ?? 0;
+      document.getElementById("stat-lecons").textContent = nbLecons ?? 0;
+
+      const liste = document.getElementById("liste-classes");
+      if (!classes || classes.length === 0) {
+        liste.innerHTML = `<div class="vide">Aucune classe pour l'instant. <a href="/enseignant/classes.html">Créez votre première classe</a>.</div>`;
+      } else {
+        liste.innerHTML = classes.map(c => `
+          <a class="carte carte-lien" href="/enseignant/classe.html?id=${c.id}">
+            <h3 class="mt-0">${echapperHtml(c.nom)}</h3>
+            <p class="mb-0">Code d'invitation : <strong>${c.code_invitation}</strong></p>
+          </a>
+        `).join("");
+      }
+    }
+  </script>
+</body>
+</html>

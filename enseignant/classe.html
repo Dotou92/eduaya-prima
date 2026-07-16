@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ma classe — Espace Enseignant</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Enseignant</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <div>
+          <h1 id="titre-classe" class="mb-0">Classe</h1>
+          <p class="texte-att mt-0" id="sous-titre-classe"></p>
+        </div>
+        <div class="flex gap-1">
+          <a class="bouton bouton-contour" id="lien-resultats" href="#">Voir les résultats</a>
+          <button class="bouton bouton-primaire" id="bouton-ajouter-eleve">+ Ajouter un(e) élève</button>
+        </div>
+      </div>
+
+      <div class="carte" id="carte-formulaire" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">Créer un compte élève</h3>
+        <div id="alerte-zone"></div>
+        <form id="form-eleve" class="formulaire" style="max-width:none;">
+          <div class="champ">
+            <label for="prenom">Prénom de l'élève</label>
+            <input type="text" id="prenom" required />
+          </div>
+          <button type="submit" class="bouton bouton-primaire" id="bouton-creer">Créer le compte</button>
+        </form>
+      </div>
+
+      <div class="carte" id="carte-identifiants" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">🪪 Carte à remettre à l'élève</h3>
+        <p>Notez ces informations avant de fermer — le code secret ne sera plus jamais affiché.</p>
+        <table class="tableau">
+          <tr><th>Identifiant</th><td id="carte-identifiant"></td></tr>
+          <tr><th>Code secret</th><td id="carte-pin"></td></tr>
+          <tr><th>Code pour les parents</th><td id="carte-code-parent"></td></tr>
+        </table>
+      </div>
+
+      <h2>Élèves de la classe</h2>
+      <div id="liste-eleves"><p class="texte-att">Chargement…</p></div>
+
+      <h2 style="margin-top: 2rem;">Devoirs assignés</h2>
+      <div id="liste-devoirs"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, parametreUrl, afficherToast, formaterDate } from "/js/ui.js";
+    import { supabase, creerClientJetable } from "/js/supabase-client.js";
+
+    const classeId = parametreUrl("id");
+    const contexte = await exigerRole("enseignant");
+    if (contexte && classeId) {
+      initLayout({ role: "enseignant", actif: "classes", profile: contexte.profile });
+
+      const { data: classe, error } = await supabase
+        .from("classes").select("*, niveaux(code, nom)").eq("id", classeId).single();
+      if (error || !classe) {
+        document.getElementById("titre-classe").textContent = "Classe introuvable";
+      } else {
+        document.getElementById("titre-classe").textContent = classe.nom;
+        document.getElementById("sous-titre-classe").textContent =
+          `${classe.niveaux?.code} — ${classe.annee_scolaire} — Code d'invitation : ${classe.code_invitation}`;
+        document.getElementById("lien-resultats").href = `/enseignant/resultats.html?classe=${classeId}`;
+      }
+
+      const carteFormulaire = document.getElementById("carte-formulaire");
+      document.getElementById("bouton-ajouter-eleve").addEventListener("click", () => {
+        carteFormulaire.style.display = carteFormulaire.style.display === "none" ? "block" : "none";
+      });
+
+      function slugifier(texte) {
+        return texte.toString().trim().toLowerCase()
+          .normalize("NFD").replace(/[̀-ͯ]/g, "")
+          .replace(/[^a-z0-9]/g, "") || "eleve";
+      }
+
+      document.getElementById("form-eleve").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const bouton = document.getElementById("bouton-creer");
+        bouton.disabled = true;
+        document.getElementById("alerte-zone").innerHTML = "";
+
+        const prenom = document.getElementById("prenom").value.trim();
+        const identifiant = `${slugifier(prenom)}${Math.floor(1000 + Math.random() * 9000)}`;
+        const email = `${identifiant}@eleves.eduaya-prima.local`;
+        const pin = String(Math.floor(100000 + Math.random() * 900000));
+
+        const clientJetable = creerClientJetable();
+        const { data, error: erreurInscription } = await clientJetable.auth.signUp({
+          email, password: pin,
+          options: { data: { role: "ecolier", prenom, niveau_id: classe.niveau_id } },
+        });
+
+        if (erreurInscription || !data.user) {
+          bouton.disabled = false;
+          document.getElementById("alerte-zone").innerHTML =
+            `<div class="alerte alerte-erreur">${erreurInscription?.message || "Échec de la création du compte."}</div>`;
+          return;
+        }
+
+        const { error: erreurInscriptionClasse } = await supabase
+          .from("classe_eleves").insert({ classe_id: classeId, eleve_id: data.user.id });
+
+        const { data: profilEleve } = await supabase
+          .from("profiles").select("code_liaison_parent").eq("id", data.user.id).single();
+
+        bouton.disabled = false;
+        if (erreurInscriptionClasse) {
+          document.getElementById("alerte-zone").innerHTML =
+            `<div class="alerte alerte-erreur">Compte créé mais impossible de l'ajouter à la classe : ${erreurInscriptionClasse.message}</div>`;
+        } else {
+          document.getElementById("form-eleve").reset();
+          afficherToast("Élève ajouté !", "succes");
+        }
+
+        document.getElementById("carte-identifiant").textContent = identifiant;
+        document.getElementById("carte-pin").textContent = pin;
+        document.getElementById("carte-code-parent").textContent = profilEleve?.code_liaison_parent || "—";
+        document.getElementById("carte-identifiants").style.display = "block";
+
+        chargerEleves();
+      });
+
+      async function chargerEleves() {
+        const conteneur = document.getElementById("liste-eleves");
+        const { data: inscriptions, error: erreurListe } = await supabase
+          .from("classe_eleves")
+          .select("eleve_id, date_ajout, profiles(prenom, nom, code_liaison_parent)")
+          .eq("classe_id", classeId);
+
+        if (erreurListe) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${erreurListe.message}</div>`; return; }
+        if (!inscriptions || inscriptions.length === 0) {
+          conteneur.innerHTML = `<div class="vide">Aucun élève pour l'instant.</div>`;
+          return;
+        }
+        conteneur.innerHTML = `
+          <table class="tableau">
+            <thead><tr><th>Prénom</th><th>Ajouté le</th><th>Code parent</th></tr></thead>
+            <tbody>
+              ${inscriptions.map(i => `
+                <tr>
+                  <td>${echapperHtml(i.profiles?.prenom || "—")}</td>
+                  <td>${formaterDate(i.date_ajout)}</td>
+                  <td><code>${i.profiles?.code_liaison_parent || "—"}</code></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      async function chargerDevoirs() {
+        const conteneur = document.getElementById("liste-devoirs");
+        const { data: devoirs } = await supabase
+          .from("devoirs").select("id, titre, date_limite").eq("classe_id", classeId)
+          .order("created_at", { ascending: false });
+        if (!devoirs || devoirs.length === 0) {
+          conteneur.innerHTML = `<div class="vide">Aucun devoir assigné à cette classe. <a href="/enseignant/nouveau-devoir.html?classe=${classeId}">En créer un</a>.</div>`;
+          return;
+        }
+        conteneur.innerHTML = devoirs.map(d => `
+          <div class="carte" style="margin-bottom: 0.75rem;">
+            <strong>${echapperHtml(d.titre)}</strong>
+            ${d.date_limite ? `<span class="pastille pastille-jaune">Avant le ${formaterDate(d.date_limite)}</span>` : ""}
+          </div>
+        `).join("");
+      }
+
+      chargerEleves();
+      chargerDevoirs();
+    }
+  </script>
+</body>
+</html>

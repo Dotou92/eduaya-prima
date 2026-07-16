@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mes classes — Espace Enseignant</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Enseignant</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1>Mes classes</h1>
+        <button class="bouton bouton-primaire" id="bouton-nouvelle">+ Nouvelle classe</button>
+      </div>
+
+      <div class="carte" id="carte-formulaire" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">Créer une classe</h3>
+        <div id="alerte-zone"></div>
+        <form id="form-classe" class="formulaire" style="max-width:none;">
+          <div class="champ">
+            <label for="nom">Nom de la classe</label>
+            <input type="text" id="nom" required placeholder="ex : CE1 A" />
+          </div>
+          <div class="champ">
+            <label for="niveau">Niveau</label>
+            <select id="niveau" required></select>
+          </div>
+          <div class="champ">
+            <label for="annee">Année scolaire</label>
+            <input type="text" id="annee" required placeholder="ex : 2025-2026" />
+          </div>
+          <button type="submit" class="bouton bouton-primaire">Créer la classe</button>
+        </form>
+      </div>
+
+      <div id="liste-classes" class="grille"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, afficherToast } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+    import { obtenirNiveaux, optionsNiveaux } from "/js/reference-data.js";
+
+    const contexte = await exigerRole("enseignant");
+    if (contexte) {
+      initLayout({ role: "enseignant", actif: "classes", profile: contexte.profile });
+
+      const carteFormulaire = document.getElementById("carte-formulaire");
+      document.getElementById("bouton-nouvelle").addEventListener("click", () => {
+        carteFormulaire.style.display = carteFormulaire.style.display === "none" ? "block" : "none";
+      });
+
+      const niveaux = await obtenirNiveaux();
+      document.getElementById("niveau").innerHTML = optionsNiveaux(niveaux);
+
+      async function chargerClasses() {
+        const liste = document.getElementById("liste-classes");
+        const { data: classes, error } = await supabase
+          .from("classes")
+          .select("id, nom, code_invitation, niveau_id, niveaux(code)")
+          .eq("enseignant_id", contexte.user.id)
+          .order("created_at", { ascending: false });
+
+        if (error) { liste.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (!classes || classes.length === 0) {
+          liste.innerHTML = `<div class="vide">Aucune classe. Créez-en une avec le bouton ci-dessus.</div>`;
+          return;
+        }
+        liste.innerHTML = classes.map(c => `
+          <a class="carte carte-lien" href="/enseignant/classe.html?id=${c.id}">
+            <span class="pastille pastille-vert">${c.niveaux?.code || ""}</span>
+            <h3>${echapperHtml(c.nom)}</h3>
+            <p class="mb-0">Code d'invitation : <strong>${c.code_invitation}</strong></p>
+          </a>
+        `).join("");
+      }
+
+      document.getElementById("form-classe").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nom = document.getElementById("nom").value.trim();
+        const niveau_id = document.getElementById("niveau").value;
+        const annee_scolaire = document.getElementById("annee").value.trim();
+        const { error } = await supabase.from("classes").insert({
+          nom, niveau_id, annee_scolaire, enseignant_id: contexte.user.id,
+        });
+        if (error) {
+          document.getElementById("alerte-zone").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+          return;
+        }
+        document.getElementById("form-classe").reset();
+        carteFormulaire.style.display = "none";
+        afficherToast("Classe créée !", "succes");
+        chargerClasses();
+      });
+
+      chargerClasses();
+    }
+  </script>
+</body>
+</html>
