@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Leçon — Écolier</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion — les leçons téléchargées restent disponibles.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Écolier</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1 id="titre-lecon" class="mb-0">Leçon</h1>
+        <button class="bouton bouton-contour" id="bouton-telecharger">📥 Télécharger pour hors-ligne</button>
+      </div>
+      <div class="carte" id="carte-contenu" style="margin-bottom: 1.5rem;"></div>
+      <h2>Exercices</h2>
+      <div id="liste-exercices"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, parametreUrl, afficherToast } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+    import { obtenirLeconHorsLigne, listerExercicesDeLeconHorsLigne } from "/js/offline-db.js";
+    import { telechargerLeconPourHorsLigne } from "/js/content-cache.js";
+
+    const leconId = parametreUrl("id");
+    const contexte = await exigerRole("ecolier");
+    if (contexte && leconId) {
+      initLayout({ role: "ecolier", actif: "tableau-de-bord", profile: contexte.profile });
+
+      let lecon, exercices;
+      if (navigator.onLine) {
+        const { data: l } = await supabase.from("lecons").select("*").eq("id", leconId).single();
+        const { data: ex } = await supabase.from("exercices").select("id, titre, type").eq("lecon_id", leconId).order("ordre");
+        lecon = l; exercices = ex;
+      } else {
+        lecon = await obtenirLeconHorsLigne(leconId);
+        exercices = await listerExercicesDeLeconHorsLigne(leconId);
+      }
+
+      if (!lecon) {
+        document.getElementById("titre-lecon").textContent = "Leçon non disponible hors-ligne";
+        document.getElementById("carte-contenu").innerHTML = `<p class="texte-att">Reconnecte-toi à Internet pour voir cette leçon, ou choisis-en une déjà téléchargée.</p>`;
+      } else {
+        document.getElementById("titre-lecon").textContent = lecon.titre;
+        document.getElementById("carte-contenu").innerHTML =
+          (lecon.contenu?.blocs || []).map(b => `<p>${echapperHtml(b.texte)}</p>`).join("") || "<p class=\"texte-att\">Contenu vide.</p>";
+
+        document.getElementById("liste-exercices").innerHTML = (exercices && exercices.length)
+          ? exercices.map(ex => `
+              <a class="carte carte-lien flex items-center justify-between" style="margin-bottom:0.75rem;" href="/ecolier/exercice.html?id=${ex.id}&lecon=${leconId}">
+                <strong>${echapperHtml(ex.titre)}</strong>
+                <span>▶</span>
+              </a>
+            `).join("")
+          : `<div class="vide">Aucun exercice pour cette leçon.</div>`;
+      }
+
+      document.getElementById("bouton-telecharger").addEventListener("click", async (e) => {
+        e.target.disabled = true;
+        e.target.textContent = "Téléchargement…";
+        try {
+          await telechargerLeconPourHorsLigne(leconId);
+          afficherToast("Leçon disponible hors-ligne !", "succes");
+          e.target.textContent = "✅ Disponible hors-ligne";
+        } catch (err) {
+          afficherToast("Téléchargement impossible (connexion requise).", "erreur");
+          e.target.textContent = "📥 Télécharger pour hors-ligne";
+          e.target.disabled = false;
+        }
+      });
+    }
+  </script>
+</body>
+</html>

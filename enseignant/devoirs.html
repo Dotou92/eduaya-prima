@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Devoirs — Espace Enseignant</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Enseignant</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1>Devoirs</h1>
+        <button class="bouton bouton-primaire" id="bouton-nouveau">+ Nouveau devoir</button>
+      </div>
+
+      <div class="carte" id="carte-formulaire" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">Créer un devoir</h3>
+        <div id="alerte-zone"></div>
+        <form id="form-devoir" class="formulaire" style="max-width:none;">
+          <div class="champ">
+            <label for="classe">Classe</label>
+            <select id="classe" required></select>
+          </div>
+          <div class="champ">
+            <label for="titre">Titre</label>
+            <input type="text" id="titre" required />
+          </div>
+          <div class="champ">
+            <label for="description">Description (optionnel)</label>
+            <textarea id="description" rows="2"></textarea>
+          </div>
+          <div class="champ">
+            <label for="date-limite">Date limite (optionnel)</label>
+            <input type="date" id="date-limite" />
+          </div>
+          <div class="champ">
+            <label>Exercices à inclure</label>
+            <div id="liste-exercices-choix" class="texte-att">Choisissez d'abord une classe…</div>
+          </div>
+          <button type="submit" class="bouton bouton-primaire">Créer le devoir</button>
+        </form>
+      </div>
+
+      <div id="liste-devoirs"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, afficherToast, formaterDate } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("enseignant");
+    if (contexte) {
+      initLayout({ role: "enseignant", actif: "devoirs", profile: contexte.profile });
+
+      const carteFormulaire = document.getElementById("carte-formulaire");
+      document.getElementById("bouton-nouveau").addEventListener("click", () => {
+        carteFormulaire.style.display = carteFormulaire.style.display === "none" ? "block" : "none";
+      });
+
+      const { data: classes } = await supabase.from("classes").select("id, nom, niveau_id").eq("enseignant_id", contexte.user.id);
+      const selectClasse = document.getElementById("classe");
+      selectClasse.innerHTML = (classes || []).map(c => `<option value="${c.id}" data-niveau="${c.niveau_id}">${c.nom}</option>`).join("");
+
+      async function chargerExercicesPourClasse() {
+        const option = selectClasse.selectedOptions[0];
+        if (!option) return;
+        const classeId = option.value;
+        const niveauId = option.dataset.niveau;
+        const conteneur = document.getElementById("liste-exercices-choix");
+        const { data: exercices } = await supabase
+          .from("exercices")
+          .select("id, titre, type")
+          .eq("niveau_id", niveauId)
+          .or(`classe_id.eq.${classeId},classe_id.is.null`);
+        if (!exercices || exercices.length === 0) {
+          conteneur.innerHTML = `<p class="texte-att">Aucun exercice disponible pour ce niveau. <a href="/enseignant/lecons.html">Créez-en un</a>.</p>`;
+          return;
+        }
+        conteneur.innerHTML = exercices.map(ex => `
+          <label class="chip-choix" style="cursor:pointer;">
+            <input type="checkbox" value="${ex.id}" class="choix-exercice" /> ${echapperHtml(ex.titre)}
+          </label>
+        `).join("");
+      }
+      selectClasse.addEventListener("change", chargerExercicesPourClasse);
+      if (selectClasse.options.length) chargerExercicesPourClasse();
+
+      document.getElementById("form-devoir").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const classe_id = selectClasse.value;
+        const titre = document.getElementById("titre").value.trim();
+        const description = document.getElementById("description").value.trim() || null;
+        const dateLimiteBrute = document.getElementById("date-limite").value;
+        const date_limite = dateLimiteBrute ? new Date(dateLimiteBrute).toISOString() : null;
+        const exerciceIds = [...document.querySelectorAll(".choix-exercice:checked")].map(c => c.value);
+
+        const { data: devoir, error } = await supabase
+          .from("devoirs")
+          .insert({ classe_id, titre, description, date_limite, enseignant_id: contexte.user.id })
+          .select().single();
+
+        if (error) {
+          document.getElementById("alerte-zone").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+          return;
+        }
+
+        if (exerciceIds.length) {
+          await supabase.from("devoir_exercices").insert(
+            exerciceIds.map((exercice_id, ordre) => ({ devoir_id: devoir.id, exercice_id, ordre }))
+          );
+        }
+
+        document.getElementById("form-devoir").reset();
+        carteFormulaire.style.display = "none";
+        afficherToast("Devoir créé !", "succes");
+        chargerDevoirs();
+      });
+
+      async function chargerDevoirs() {
+        const conteneur = document.getElementById("liste-devoirs");
+        const { data: devoirs, error } = await supabase
+          .from("devoirs").select("id, titre, date_limite, classes(nom)")
+          .eq("enseignant_id", contexte.user.id)
+          .order("created_at", { ascending: false });
+        if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (!devoirs || devoirs.length === 0) {
+          conteneur.innerHTML = `<div class="vide">Aucun devoir créé.</div>`;
+          return;
+        }
+        conteneur.innerHTML = devoirs.map(d => `
+          <div class="carte" style="margin-bottom:0.75rem;">
+            <strong>${echapperHtml(d.titre)}</strong> — <span class="texte-att">${d.classes?.nom || ""}</span>
+            ${d.date_limite ? `<span class="pastille pastille-jaune">Avant le ${formaterDate(d.date_limite)}</span>` : ""}
+          </div>
+        `).join("");
+      }
+
+      chargerDevoirs();
+    }
+  </script>
+</body>
+</html>

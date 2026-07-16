@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EduAya Prima — Plateforme éducative du primaire</title>
+  <meta name="description" content="Plateforme éducative pour le primaire au Bénin, pour les écoliers, les parents et les enseignants." />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <meta name="theme-color" content="#00873e" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion — certaines pages nécessitent Internet.</div>
+
+  <header style="padding: 1.25rem 0; border-bottom: 1px solid var(--couleur-bordure);">
+    <div class="conteneur flex items-center justify-between">
+      <div style="font-weight: 800; font-size: 1.15rem;">🎓 EduAya Prima</div>
+      <nav class="flex gap-2">
+        <a href="/auth/login.html" class="bouton bouton-contour">Se connecter</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="conteneur" style="padding: 3rem 0 2rem; text-align: center;">
+      <h1>La plateforme éducative du primaire, adaptée au programme béninois</h1>
+      <p style="max-width: 640px; margin: 0 auto 1.5rem; font-size: 1.05rem;">
+        Leçons et exercices du CI au CM2 en Français, Mathématiques et Éveil, pensés pour
+        fonctionner même avec une connexion Internet limitée — pour les écoliers, leurs parents et leurs enseignants.
+      </p>
+      <div class="flex gap-2" style="justify-content: center; flex-wrap: wrap;">
+        <a href="/auth/inscription-enseignant.html" class="bouton bouton-primaire bouton-grand">Je suis enseignant(e)</a>
+        <a href="/auth/inscription-parent.html" class="bouton bouton-accent bouton-grand">Je suis parent</a>
+      </div>
+      <p class="texte-att" style="margin-top: 1rem;">Élève ? Ton enseignant(e) te donnera un identifiant et un code pour te connecter.</p>
+    </section>
+
+    <section class="conteneur grille" style="padding: 2rem 0 4rem;">
+      <div class="carte">
+        <h3>👦 Écoliers</h3>
+        <p>Des leçons claires et des exercices interactifs corrigés instantanément, même sans connexion.</p>
+      </div>
+      <div class="carte">
+        <h3>👪 Parents</h3>
+        <p>Suivez la progression de vos enfants, leurs résultats et leurs points à retravailler.</p>
+      </div>
+      <div class="carte">
+        <h3>👩‍🏫 Enseignants</h3>
+        <p>Créez des leçons et des exercices, organisez vos classes et suivez les résultats de chaque élève.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initBandeauHorsLigne } from "/js/ui.js";
+    initBandeauHorsLigne();
+  </script>
+</body>
+</html>

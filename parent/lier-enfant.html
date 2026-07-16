@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lier un enfant — Espace Parent</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Parent</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <h1>Lier un enfant</h1>
+      <div class="carte" style="max-width: 480px;">
+        <p>Demandez le <strong>code parent</strong> à l'enseignant(e) ou à l'enfant (il figure sur sa carte d'identifiants).</p>
+        <div id="alerte-zone"></div>
+        <form id="form-code" class="formulaire" style="max-width:none;">
+          <div class="champ">
+            <label for="code">Code parent (6 caractères)</label>
+            <input type="text" id="code" required maxlength="6" style="text-transform:uppercase; letter-spacing:0.2em; font-weight:700; text-align:center;" />
+          </div>
+          <button type="submit" class="bouton bouton-accent bouton-bloc bouton-grand">Lier cet enfant</button>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, afficherToast } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("parent");
+    if (contexte) {
+      initLayout({ role: "parent", actif: "lier-enfant", profile: contexte.profile });
+
+      document.getElementById("form-code").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const code = document.getElementById("code").value.trim();
+        const { data, error } = await supabase.rpc("lier_enfant", { p_code: code });
+        const alerteZone = document.getElementById("alerte-zone");
+        if (error) {
+          alerteZone.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+          return;
+        }
+        afficherToast(`${data?.[0]?.prenom || "Enfant"} a bien été lié(e) !`, "succes");
+        window.location.href = "/parent/tableau-de-bord.html";
+      });
+    }
+  </script>
+</body>
+</html>

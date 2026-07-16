@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connexion — EduAya Prima</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+
+  <main class="conteneur-etroit" style="padding: 3rem 0;">
+    <div class="texte-centre" style="margin-bottom: 1.5rem;">
+      <a href="/" style="text-decoration: none; color: inherit; font-weight: 800; font-size: 1.2rem;">🎓 EduAya Prima</a>
+    </div>
+
+    <div class="carte">
+      <div class="flex gap-1" style="margin-bottom: 1.25rem;">
+        <button class="bouton bouton-primaire" id="onglet-adulte" style="flex:1;">Parent / Enseignant</button>
+        <button class="bouton bouton-contour" id="onglet-eleve" style="flex:1;">Écolier</button>
+      </div>
+
+      <div id="alerte-zone"></div>
+
+      <form id="form-adulte" class="formulaire" style="max-width:none;">
+        <div class="champ">
+          <label for="email">Adresse e-mail</label>
+          <input type="email" id="email" required autocomplete="email" />
+        </div>
+        <div class="champ">
+          <label for="mot-de-passe">Mot de passe</label>
+          <input type="password" id="mot-de-passe" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="bouton bouton-primaire bouton-bloc bouton-grand" id="bouton-connexion-adulte">Se connecter</button>
+      </form>
+
+      <form id="form-eleve" class="formulaire" style="max-width:none; display:none;">
+        <div class="champ">
+          <label for="identifiant">Identifiant</label>
+          <input type="text" id="identifiant" required autocapitalize="none" placeholder="ex : awa4821" />
+        </div>
+        <div class="champ">
+          <label for="pin">Code secret</label>
+          <input type="text" id="pin" inputmode="numeric" required placeholder="ex : 384920" />
+        </div>
+        <button type="submit" class="bouton bouton-accent bouton-bloc bouton-grand" id="bouton-connexion-eleve">Se connecter</button>
+      </form>
+
+      <p class="texte-centre texte-att" style="margin-top: 1.25rem;">
+        Pas encore de compte ?
+        <a href="/auth/inscription-enseignant.html">Enseignant</a> ·
+        <a href="/auth/inscription-parent.html">Parent</a>
+      </p>
+    </div>
+  </main>
+
+  <script type="module">
+    import { supabase } from "/js/supabase-client.js";
+    import { TABLEAUX_DE_BORD } from "/js/auth.js";
+    import { initBandeauHorsLigne } from "/js/ui.js";
+
+    initBandeauHorsLigne();
+
+    const DOMAINE_ELEVE = "eleves.eduaya-prima.local";
+
+    const ongletAdulte = document.getElementById("onglet-adulte");
+    const ongletEleve = document.getElementById("onglet-eleve");
+    const formAdulte = document.getElementById("form-adulte");
+    const formEleve = document.getElementById("form-eleve");
+    const alerteZone = document.getElementById("alerte-zone");
+
+    ongletAdulte.addEventListener("click", () => basculerOnglet("adulte"));
+    ongletEleve.addEventListener("click", () => basculerOnglet("eleve"));
+
+    function basculerOnglet(cible) {
+      const estAdulte = cible === "adulte";
+      formAdulte.style.display = estAdulte ? "block" : "none";
+      formEleve.style.display = estAdulte ? "none" : "block";
+      ongletAdulte.className = `bouton ${estAdulte ? "bouton-primaire" : "bouton-contour"}`;
+      ongletEleve.className = `bouton ${estAdulte ? "bouton-contour" : "bouton-primaire"}`;
+      alerteZone.innerHTML = "";
+    }
+
+    function afficherErreur(message) {
+      alerteZone.innerHTML = `<div class="alerte alerte-erreur">${message}</div>`;
+    }
+
+    async function apresConnexion() {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+      window.location.href = TABLEAUX_DE_BORD[profile?.role] || "/";
+    }
+
+    formAdulte.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const bouton = document.getElementById("bouton-connexion-adulte");
+      bouton.disabled = true;
+      alerteZone.innerHTML = "";
+      const email = document.getElementById("email").value.trim();
+      const motDePasse = document.getElementById("mot-de-passe").value;
+      const { error } = await supabase.auth.signInWithPassword({ email, password: motDePasse });
+      bouton.disabled = false;
+      if (error) return afficherErreur("Email ou mot de passe incorrect.");
+      apresConnexion();
+    });
+
+    formEleve.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const bouton = document.getElementById("bouton-connexion-eleve");
+      bouton.disabled = true;
+      alerteZone.innerHTML = "";
+      const identifiant = document.getElementById("identifiant").value.trim().toLowerCase();
+      const pin = document.getElementById("pin").value.trim();
+      const email = `${identifiant}@${DOMAINE_ELEVE}`;
+      const { error } = await supabase.auth.signInWithPassword({ email, password: pin });
+      bouton.disabled = false;
+      if (error) return afficherErreur("Identifiant ou code secret incorrect.");
+      apresConnexion();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mes leçons — Écolier</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion — les leçons téléchargées restent disponibles.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Écolier</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1 id="titre">Leçons</h1>
+        <a href="/ecolier/tableau-de-bord.html" class="bouton bouton-contour">← Retour</a>
+      </div>
+      <div id="liste-lecons" class="grille"><p class="texte-att">Chargement…</p></div>
+      <div id="liste-lecons-hors-ligne" class="grille" style="display:none;"></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, parametreUrl } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+    import { obtenirMatieres } from "/js/reference-data.js";
+    import { listerLeconsHorsLigne } from "/js/offline-db.js";
+
+    const matiereId = parametreUrl("matiere");
+    const contexte = await exigerRole("ecolier");
+    if (contexte) {
+      initLayout({ role: "ecolier", actif: "tableau-de-bord", profile: contexte.profile });
+
+      const matieres = await obtenirMatieres();
+      const matiere = matieres.find(m => m.id == matiereId);
+      document.getElementById("titre").textContent = matiere ? `${matiere.icone} ${matiere.nom}` : "Leçons";
+
+      const conteneur = document.getElementById("liste-lecons");
+
+      if (!navigator.onLine) {
+        const horsLigne = (await listerLeconsHorsLigne()).filter(l => l.matiere_id == matiereId && l.niveau_id == contexte.profile.niveau_id);
+        conteneur.innerHTML = horsLigne.length
+          ? horsLigne.map(l => `
+              <a class="carte carte-lien" href="/ecolier/lecon.html?id=${l.id}">
+                <h3>${echapperHtml(l.titre)}</h3>
+                <span class="pastille pastille-jaune">📥 Disponible hors-ligne</span>
+              </a>
+            `).join("")
+          : `<div class="vide">Aucune leçon téléchargée pour un usage hors-ligne dans cette matière.</div>`;
+        return;
+      }
+
+      const { data: lecons, error } = await supabase
+        .from("lecons")
+        .select("id, titre")
+        .eq("matiere_id", matiereId)
+        .eq("niveau_id", contexte.profile.niveau_id)
+        .eq("statut", "publie")
+        .order("created_at");
+
+      if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+      conteneur.innerHTML = (lecons && lecons.length)
+        ? lecons.map(l => `
+            <a class="carte carte-lien" href="/ecolier/lecon.html?id=${l.id}">
+              <h3 class="mb-0">${echapperHtml(l.titre)}</h3>
+            </a>
+          `).join("")
+        : `<div class="vide">Pas encore de leçon dans cette matière pour ton niveau.</div>`;
+    }
+  </script>
+</body>
+</html>

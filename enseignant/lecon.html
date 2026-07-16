@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Leçon — Espace Enseignant</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Enseignant</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <div>
+          <h1 id="titre-lecon" class="mb-0">Leçon</h1>
+          <p class="texte-att mt-0" id="sous-titre-lecon"></p>
+        </div>
+        <button class="bouton bouton-danger" id="bouton-supprimer">Supprimer la leçon</button>
+      </div>
+
+      <div class="carte" id="carte-contenu" style="margin-bottom: 1.5rem;"></div>
+
+      <div class="entete-page">
+        <h2 class="mb-0">Exercices</h2>
+        <button class="bouton bouton-primaire" id="bouton-nouvel-exercice">+ Ajouter un exercice</button>
+      </div>
+
+      <div class="carte" id="carte-formulaire-exercice" style="display:none; margin-bottom: 1.5rem;">
+        <div id="alerte-zone"></div>
+        <form id="form-exercice" class="formulaire" style="max-width:none;">
+          <div class="champ">
+            <label for="titre-exercice">Titre de l'exercice</label>
+            <input type="text" id="titre-exercice" required />
+          </div>
+          <div class="champ">
+            <label for="type-exercice">Type d'exercice</label>
+            <select id="type-exercice">
+              <option value="qcm">Choix multiple (QCM)</option>
+              <option value="texte_a_trous">Texte à trous</option>
+              <option value="association">Association</option>
+              <option value="vrai_faux">Vrai ou faux</option>
+            </select>
+          </div>
+
+          <div id="zone-qcm">
+            <div class="champ"><label>Question</label><input type="text" id="qcm-question" /></div>
+            <div id="qcm-choix"></div>
+            <button type="button" class="bouton bouton-contour" id="qcm-ajouter-choix">+ Ajouter un choix</button>
+            <p class="texte-att" style="margin-top:0.5rem;">Cochez la ou les bonnes réponses.</p>
+          </div>
+
+          <div id="zone-texte-a-trous" style="display:none;">
+            <div class="champ">
+              <label for="tat-texte">Texte (mettez la bonne réponse entre doubles accolades, ex : Le chat {{dort}} sur le tapis. Plusieurs réponses acceptées : {{dort/se repose}})</label>
+              <textarea id="tat-texte" rows="4"></textarea>
+            </div>
+          </div>
+
+          <div id="zone-association" style="display:none;">
+            <div id="assoc-paires"></div>
+            <button type="button" class="bouton bouton-contour" id="assoc-ajouter-paire">+ Ajouter une paire</button>
+          </div>
+
+          <div id="zone-vrai-faux" style="display:none;">
+            <div class="champ"><label for="vf-affirmation">Affirmation</label><input type="text" id="vf-affirmation" /></div>
+            <div class="champ">
+              <label><input type="radio" name="vf-reponse" value="true" checked /> Vrai</label>
+              <label><input type="radio" name="vf-reponse" value="false" /> Faux</label>
+            </div>
+          </div>
+
+          <button type="submit" class="bouton bouton-primaire" style="margin-top:1rem;">Enregistrer l'exercice</button>
+        </form>
+      </div>
+
+      <div id="liste-exercices"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, parametreUrl, afficherToast } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const leconId = parametreUrl("id");
+    const contexte = await exigerRole("enseignant");
+    if (contexte && leconId) {
+      initLayout({ role: "enseignant", actif: "lecons", profile: contexte.profile });
+
+      const { data: lecon } = await supabase
+        .from("lecons").select("*, niveaux(code), matieres(nom, icone)").eq("id", leconId).single();
+
+      if (!lecon) {
+        document.getElementById("titre-lecon").textContent = "Leçon introuvable";
+      } else {
+        document.getElementById("titre-lecon").textContent = lecon.titre;
+        document.getElementById("sous-titre-lecon").textContent = `${lecon.niveaux?.code} — ${lecon.matieres?.icone} ${lecon.matieres?.nom}`;
+        document.getElementById("carte-contenu").innerHTML =
+          (lecon.contenu?.blocs || []).map(b => `<p>${echapperHtml(b.texte)}</p>`).join("") || "<p class=\"texte-att\">Contenu vide.</p>";
+      }
+
+      document.getElementById("bouton-supprimer").addEventListener("click", async () => {
+        if (!confirm("Supprimer définitivement cette leçon et ses exercices ?")) return;
+        await supabase.from("lecons").delete().eq("id", leconId);
+        window.location.href = "/enseignant/lecons.html";
+      });
+
+      // ---- Formulaire d'exercice ----
+      const carteFormExercice = document.getElementById("carte-formulaire-exercice");
+      document.getElementById("bouton-nouvel-exercice").addEventListener("click", () => {
+        carteFormExercice.style.display = carteFormExercice.style.display === "none" ? "block" : "none";
+      });
+
+      const zones = {
+        qcm: document.getElementById("zone-qcm"),
+        texte_a_trous: document.getElementById("zone-texte-a-trous"),
+        association: document.getElementById("zone-association"),
+        vrai_faux: document.getElementById("zone-vrai-faux"),
+      };
+      document.getElementById("type-exercice").addEventListener("change", (e) => {
+        Object.entries(zones).forEach(([type, el]) => el.style.display = type === e.target.value ? "block" : "none");
+      });
+
+      const STYLE_CHAMP_INLINE = "flex:1; padding:0.65rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure); font:inherit;";
+
+      function ligneChoixQcm(n) {
+        return `<div class="flex gap-1 items-center" style="margin-bottom:0.5rem;">
+          <input type="checkbox" class="qcm-bonne" title="Bonne réponse" />
+          <input type="text" class="qcm-texte-choix" style="${STYLE_CHAMP_INLINE}" placeholder="Choix ${n}" />
+        </div>`;
+      }
+      const qcmChoix = document.getElementById("qcm-choix");
+      for (let i = 1; i <= 3; i++) qcmChoix.insertAdjacentHTML("beforeend", ligneChoixQcm(i));
+      document.getElementById("qcm-ajouter-choix").addEventListener("click", () => {
+        qcmChoix.insertAdjacentHTML("beforeend", ligneChoixQcm(qcmChoix.children.length + 1));
+      });
+
+      function lignePaireAssociation() {
+        return `<div class="flex gap-1" style="margin-bottom:0.5rem;">
+          <input type="text" class="assoc-gauche" style="${STYLE_CHAMP_INLINE}" placeholder="Élément (ex : Chat)" />
+          <input type="text" class="assoc-droite" style="${STYLE_CHAMP_INLINE}" placeholder="Correspond à (ex : Miaule)" />
+        </div>`;
+      }
+      const assocPaires = document.getElementById("assoc-paires");
+      for (let i = 0; i < 3; i++) assocPaires.insertAdjacentHTML("beforeend", lignePaireAssociation());
+      document.getElementById("assoc-ajouter-paire").addEventListener("click", () => {
+        assocPaires.insertAdjacentHTML("beforeend", lignePaireAssociation());
+      });
+
+      function construireContenuExercice(type) {
+        if (type === "qcm") {
+          const lignes = [...qcmChoix.children];
+          const choix = lignes.map((l, i) => ({ id: `c${i + 1}`, texte: l.querySelector(".qcm-texte-choix").value.trim() }))
+            .filter(c => c.texte);
+          const bonnesReponses = lignes
+            .map((l, i) => l.querySelector(".qcm-bonne").checked ? `c${i + 1}` : null)
+            .filter(Boolean);
+          return {
+            type: "qcm",
+            question: document.getElementById("qcm-question").value.trim(),
+            choix,
+            bonnesReponses,
+            multiple: bonnesReponses.length > 1,
+          };
+        }
+        if (type === "texte_a_trous") {
+          const brut = document.getElementById("tat-texte").value.trim();
+          let compteur = 0;
+          const trous = [];
+          const texte = brut.replace(/\{\{([^}]+)\}\}/g, (_, contenu) => {
+            compteur += 1;
+            const id = String(compteur);
+            trous.push({ id, reponsesAcceptees: contenu.split("/").map(s => s.trim()).filter(Boolean) });
+            return `{{${id}}}`;
+          });
+          return { type: "texte_a_trous", texte, trous };
+        }
+        if (type === "association") {
+          const paires = [...assocPaires.children].map((l, i) => ({
+            id: `p${i + 1}`,
+            gauche: l.querySelector(".assoc-gauche").value.trim(),
+            droite: l.querySelector(".assoc-droite").value.trim(),
+          })).filter(p => p.gauche && p.droite);
+          return { type: "association", paires };
+        }
+        if (type === "vrai_faux") {
+          return {
+            type: "vrai_faux",
+            affirmation: document.getElementById("vf-affirmation").value.trim(),
+            reponse: document.querySelector('input[name="vf-reponse"]:checked').value === "true",
+          };
+        }
+      }
+
+      document.getElementById("form-exercice").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const titre = document.getElementById("titre-exercice").value.trim();
+        const type = document.getElementById("type-exercice").value;
+        const contenu = construireContenuExercice(type);
+
+        const { error } = await supabase.from("exercices").insert({
+          titre, type, contenu,
+          lecon_id: leconId,
+          niveau_id: lecon.niveau_id,
+          matiere_id: lecon.matiere_id,
+          classe_id: lecon.classe_id,
+          auteur_id: contexte.user.id,
+        });
+
+        if (error) {
+          document.getElementById("alerte-zone").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+          return;
+        }
+        document.getElementById("form-exercice").reset();
+        carteFormExercice.style.display = "none";
+        afficherToast("Exercice ajouté !", "succes");
+        chargerExercices();
+      });
+
+      async function chargerExercices() {
+        const conteneur = document.getElementById("liste-exercices");
+        const { data: exercices } = await supabase
+          .from("exercices").select("id, titre, type").eq("lecon_id", leconId).order("ordre");
+        if (!exercices || exercices.length === 0) {
+          conteneur.innerHTML = `<div class="vide">Aucun exercice pour cette leçon.</div>`;
+          return;
+        }
+        const noms = { qcm: "Choix multiple", texte_a_trous: "Texte à trous", association: "Association", vrai_faux: "Vrai / Faux" };
+        conteneur.innerHTML = exercices.map(ex => `
+          <div class="carte flex items-center justify-between" style="margin-bottom:0.75rem;">
+            <div><strong>${echapperHtml(ex.titre)}</strong><br/><span class="pastille pastille-gris">${noms[ex.type] || ex.type}</span></div>
+            <button class="bouton bouton-contour bouton-supprimer-exercice" data-id="${ex.id}">Supprimer</button>
+          </div>
+        `).join("");
+        conteneur.querySelectorAll(".bouton-supprimer-exercice").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            if (!confirm("Supprimer cet exercice ?")) return;
+            await supabase.from("exercices").delete().eq("id", btn.dataset.id);
+            chargerExercices();
+          });
+        });
+      }
+
+      chargerExercices();
+    }
+  </script>
+</body>
+</html>

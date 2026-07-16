@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mes badges — Écolier</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Écolier</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <h1>Mes badges</h1>
+      <div id="liste-badges" class="grille"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("ecolier");
+    if (contexte) {
+      initLayout({ role: "ecolier", actif: "badges", profile: contexte.profile });
+
+      const [{ data: catalogue }, { data: obtenus }, { data: tentatives }, { data: progres }] = await Promise.all([
+        supabase.from("badges").select("*"),
+        supabase.from("eleve_badges").select("badge_id").eq("eleve_id", contexte.user.id),
+        supabase.from("tentatives").select("score, score_max").eq("eleve_id", contexte.user.id),
+        supabase.from("progres_lecons").select("statut").eq("eleve_id", contexte.user.id),
+      ]);
+
+      const idsObtenus = new Set((obtenus || []).map(o => o.badge_id));
+      const nbTentatives = tentatives?.length || 0;
+      const scoreParfait = (tentatives || []).some(t => Number(t.score) === Number(t.score_max) && Number(t.score_max) > 0);
+      const nbLeconsTerminees = (progres || []).filter(p => p.statut === "termine").length;
+
+      function critereRempli(critere) {
+        if (critere.type === "nb_tentatives") return nbTentatives >= critere.valeur;
+        if (critere.type === "score_parfait") return scoreParfait;
+        if (critere.type === "lecon_terminee") return nbLeconsTerminees >= critere.valeur;
+        return false;
+      }
+
+      // Attribue automatiquement les nouveaux badges mérités.
+      for (const badge of catalogue || []) {
+        if (!idsObtenus.has(badge.id) && critereRempli(badge.critere)) {
+          const { error } = await supabase.from("eleve_badges").insert({ eleve_id: contexte.user.id, badge_id: badge.id });
+          if (!error) idsObtenus.add(badge.id);
+        }
+      }
+
+      document.getElementById("liste-badges").innerHTML = (catalogue || []).map(b => {
+        const obtenu = idsObtenus.has(b.id);
+        return `
+          <div class="carte texte-centre" style="opacity:${obtenu ? 1 : 0.45};">
+            <div style="font-size:2.5rem;">${b.icone}</div>
+            <h3 class="mb-0">${echapperHtml(b.nom)}</h3>
+            <p class="texte-att">${echapperHtml(b.description || "")}</p>
+            ${obtenu ? `<span class="pastille pastille-vert">Obtenu</span>` : `<span class="pastille pastille-gris">À débloquer</span>`}
+          </div>
+        `;
+      }).join("");
+    }
+  </script>
+</body>
+</html>

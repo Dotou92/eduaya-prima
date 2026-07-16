@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Leçons — Espace Enseignant</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Enseignant</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1>Mes leçons</h1>
+        <button class="bouton bouton-primaire" id="bouton-nouvelle">+ Nouvelle leçon</button>
+      </div>
+
+      <div class="carte" id="carte-formulaire" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">Créer une leçon</h3>
+        <div id="alerte-zone"></div>
+        <form id="form-lecon" class="formulaire" style="max-width:none;">
+          <div class="champ">
+            <label for="titre">Titre</label>
+            <input type="text" id="titre" required placeholder="ex : L'addition sans retenue" />
+          </div>
+          <div class="flex gap-2">
+            <div class="champ" style="flex:1;">
+              <label for="niveau">Niveau</label>
+              <select id="niveau" required></select>
+            </div>
+            <div class="champ" style="flex:1;">
+              <label for="matiere">Matière</label>
+              <select id="matiere" required></select>
+            </div>
+          </div>
+          <div class="champ">
+            <label for="classe">Classe (optionnel)</label>
+            <select id="classe"><option value="">Bibliothèque partagée (toutes les classes)</option></select>
+            <small>Si aucune classe n'est choisie, la leçon est visible par tous.</small>
+          </div>
+          <div class="champ">
+            <label for="contenu">Contenu (un paragraphe par ligne vide)</label>
+            <textarea id="contenu" rows="8" required></textarea>
+          </div>
+          <button type="submit" class="bouton bouton-primaire">Créer la leçon</button>
+        </form>
+      </div>
+
+      <div id="liste-lecons" class="grille"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, afficherToast } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+    import { obtenirNiveaux, obtenirMatieres, optionsNiveaux, optionsMatieres } from "/js/reference-data.js";
+
+    const contexte = await exigerRole("enseignant");
+    if (contexte) {
+      initLayout({ role: "enseignant", actif: "lecons", profile: contexte.profile });
+
+      const carteFormulaire = document.getElementById("carte-formulaire");
+      document.getElementById("bouton-nouvelle").addEventListener("click", () => {
+        carteFormulaire.style.display = carteFormulaire.style.display === "none" ? "block" : "none";
+      });
+
+      const [niveaux, matieres] = await Promise.all([obtenirNiveaux(), obtenirMatieres()]);
+      document.getElementById("niveau").innerHTML = optionsNiveaux(niveaux);
+      document.getElementById("matiere").innerHTML = optionsMatieres(matieres);
+
+      const { data: classes } = await supabase.from("classes").select("id, nom").eq("enseignant_id", contexte.user.id);
+      const selectClasse = document.getElementById("classe");
+      (classes || []).forEach(c => selectClasse.insertAdjacentHTML("beforeend", `<option value="${c.id}">${c.nom}</option>`));
+
+      async function chargerLecons() {
+        const liste = document.getElementById("liste-lecons");
+        const { data: lecons, error } = await supabase
+          .from("lecons").select("id, titre, niveau_id, matiere_id, classe_id, niveaux(code), matieres(icone, nom)")
+          .eq("auteur_id", contexte.user.id)
+          .order("created_at", { ascending: false });
+
+        if (error) { liste.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (!lecons || lecons.length === 0) {
+          liste.innerHTML = `<div class="vide">Aucune leçon créée. Utilisez le bouton ci-dessus.</div>`;
+          return;
+        }
+        liste.innerHTML = lecons.map(l => `
+          <a class="carte carte-lien" href="/enseignant/lecon.html?id=${l.id}">
+            <span class="pastille pastille-vert">${l.niveaux?.code}</span>
+            <span class="pastille pastille-gris">${l.matieres?.icone} ${l.matieres?.nom}</span>
+            <h3>${echapperHtml(l.titre)}</h3>
+            <p class="mb-0 texte-att">${l.classe_id ? "Classe spécifique" : "Bibliothèque partagée"}</p>
+          </a>
+        `).join("");
+      }
+
+      document.getElementById("form-lecon").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const titre = document.getElementById("titre").value.trim();
+        const niveau_id = document.getElementById("niveau").value;
+        const matiere_id = document.getElementById("matiere").value;
+        const classe_id = document.getElementById("classe").value || null;
+        const texteBrut = document.getElementById("contenu").value.trim();
+        const blocs = texteBrut.split(/\n\s*\n/).map(p => ({ texte: p.trim() })).filter(b => b.texte);
+
+        const { error } = await supabase.from("lecons").insert({
+          titre, niveau_id, matiere_id, classe_id,
+          auteur_id: contexte.user.id,
+          contenu: { blocs },
+        });
+
+        if (error) {
+          document.getElementById("alerte-zone").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+          return;
+        }
+        document.getElementById("form-lecon").reset();
+        carteFormulaire.style.display = "none";
+        afficherToast("Leçon créée !", "succes");
+        chargerLecons();
+      });
+
+      chargerLecons();
+    }
+  </script>
+</body>
+</html>

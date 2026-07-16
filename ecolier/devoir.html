@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Devoir — Écolier</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Écolier</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <h1 id="titre-devoir">Devoir</h1>
+      <p class="texte-att" id="description-devoir"></p>
+      <div id="liste-exercices"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, parametreUrl } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const devoirId = parametreUrl("id");
+    const contexte = await exigerRole("ecolier");
+    if (contexte && devoirId) {
+      initLayout({ role: "ecolier", actif: "tableau-de-bord", profile: contexte.profile });
+
+      const { data: devoir } = await supabase.from("devoirs").select("titre, description").eq("id", devoirId).single();
+      document.getElementById("titre-devoir").textContent = devoir?.titre || "Devoir";
+      document.getElementById("description-devoir").textContent = devoir?.description || "";
+
+      const { data: liens } = await supabase
+        .from("devoir_exercices").select("ordre, exercices(id, titre)").eq("devoir_id", devoirId).order("ordre");
+
+      const conteneur = document.getElementById("liste-exercices");
+      conteneur.innerHTML = (liens && liens.length)
+        ? liens.map(l => `
+            <a class="carte carte-lien flex items-center justify-between" style="margin-bottom:0.75rem;" href="/ecolier/exercice.html?id=${l.exercices.id}&devoir=${devoirId}">
+              <strong>${echapperHtml(l.exercices.titre)}</strong><span>▶</span>
+            </a>
+          `).join("")
+        : `<div class="vide">Aucun exercice dans ce devoir.</div>`;
+    }
+  </script>
+</body>
+</html>

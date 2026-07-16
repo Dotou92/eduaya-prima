@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Progrès de l'enfant — Espace Parent</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Parent</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1 id="titre" class="mb-0">Progrès</h1>
+        <a href="/parent/tableau-de-bord.html" class="bouton bouton-contour">← Mes enfants</a>
+      </div>
+
+      <div class="grille" style="margin-bottom: 2rem;">
+        <div class="carte"><div class="texte-att">Exercices faits</div><h2 class="mt-0 mb-0" id="stat-tentatives">—</h2></div>
+        <div class="carte"><div class="texte-att">Score moyen</div><h2 class="mt-0 mb-0" id="stat-score">—</h2></div>
+        <div class="carte"><div class="texte-att">Leçons terminées</div><h2 class="mt-0 mb-0" id="stat-lecons">—</h2></div>
+      </div>
+
+      <h2>Résultats par matière</h2>
+      <div id="detail-matieres" style="margin-bottom:2rem;"><p class="texte-att">Chargement…</p></div>
+
+      <h2>Derniers exercices</h2>
+      <div id="derniers-exercices"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, formaterDate, parametreUrl } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+    import { obtenirMatieres } from "/js/reference-data.js";
+
+    const enfantId = parametreUrl("id");
+    const contexte = await exigerRole("parent");
+    if (contexte && enfantId) {
+      initLayout({ role: "parent", actif: "tableau-de-bord", profile: contexte.profile });
+
+      const { data: enfant } = await supabase.from("profiles").select("prenom").eq("id", enfantId).single();
+      document.getElementById("titre").textContent = `Progrès de ${enfant?.prenom || ""}`;
+
+      const { data: tentatives } = await supabase
+        .from("tentatives")
+        .select("score, score_max, date_fin, exercices(titre, matiere_id)")
+        .eq("eleve_id", enfantId)
+        .order("date_fin", { ascending: false });
+      const { data: progres } = await supabase.from("progres_lecons").select("statut").eq("eleve_id", enfantId);
+
+      const nbTentatives = tentatives?.length || 0;
+      const totalScore = (tentatives || []).reduce((s, t) => s + Number(t.score), 0);
+      const totalMax = (tentatives || []).reduce((s, t) => s + Number(t.score_max), 0);
+      const pourcentage = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : null;
+      const nbLeconsTerminees = (progres || []).filter(p => p.statut === "termine").length;
+
+      document.getElementById("stat-tentatives").textContent = nbTentatives;
+      document.getElementById("stat-score").textContent = pourcentage === null ? "—" : `${pourcentage}%`;
+      document.getElementById("stat-lecons").textContent = nbLeconsTerminees;
+
+      const matieres = await obtenirMatieres();
+      document.getElementById("detail-matieres").innerHTML = matieres.map(m => {
+        const mesTentatives = (tentatives || []).filter(t => t.exercices?.matiere_id === m.id);
+        const s = mesTentatives.reduce((s, t) => s + Number(t.score), 0);
+        const max = mesTentatives.reduce((s, t) => s + Number(t.score_max), 0);
+        const pct = max > 0 ? Math.round((s / max) * 100) : 0;
+        return `
+          <div class="carte" style="margin-bottom:0.75rem;">
+            <div class="flex items-center justify-between" style="margin-bottom:0.5rem;">
+              <strong>${m.icone} ${echapperHtml(m.nom)}</strong>
+              <span class="texte-att">${max > 0 ? `${pct}% — ${mesTentatives.length} exercice(s)` : "Pas encore commencé"}</span>
+            </div>
+            <div class="barre-progres"><div class="barre-progres__valeur" style="width:${pct}%;"></div></div>
+          </div>
+        `;
+      }).join("");
+
+      const conteneurRecents = document.getElementById("derniers-exercices");
+      const recents = (tentatives || []).slice(0, 10);
+      conteneurRecents.innerHTML = recents.length ? `
+        <table class="tableau">
+          <thead><tr><th>Exercice</th><th>Date</th><th>Score</th></tr></thead>
+          <tbody>
+            ${recents.map(t => `
+              <tr>
+                <td>${echapperHtml(t.exercices?.titre || "—")}</td>
+                <td>${formaterDate(t.date_fin)}</td>
+                <td>${t.score} / ${t.score_max}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : `<div class="vide">Aucun exercice fait pour l'instant.</div>`;
+    }
+  </script>
+</body>
+</html>
