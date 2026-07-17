@@ -118,28 +118,37 @@
       async function chargerConversations() {
         const { data: messages, error } = await supabase
           .from("messages")
-          .select(`
-            id, expediteur_id, destinataire_id, eleve_id, contenu, created_at,
-            expediteur:profiles!messages_expediteur_id_fkey(prenom),
-            destinataire:profiles!messages_destinataire_id_fkey(prenom),
-            eleve:profiles!messages_eleve_id_fkey(prenom)
-          `)
+          .select("id, expediteur_id, destinataire_id, eleve_id, contenu, created_at")
           .or(`expediteur_id.eq.${moi},destinataire_id.eq.${moi}`)
           .order("created_at");
 
-        if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (error) {
+          console.error("Erreur chargement messages :", error);
+          conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+          return;
+        }
         if (!messages || messages.length === 0) {
           conteneur.innerHTML = `<div class="vide">Aucun message pour l'instant. Utilise "+ Nouveau message" pour écrire à un parent.</div>`;
           return;
         }
 
+        // Requête séparée pour les noms (plus robuste qu'une jointure à 3 branches
+        // sur la même table `profiles` en une seule requête).
+        const idsUniques = [...new Set(messages.flatMap(m => [
+          m.expediteur_id === moi ? m.destinataire_id : m.expediteur_id,
+          m.eleve_id,
+        ]))].filter(Boolean);
+        const { data: profils } = idsUniques.length
+          ? await supabase.from("profiles").select("id, prenom").in("id", idsUniques)
+          : { data: [] };
+        const nomDe = (id) => (profils || []).find(p => p.id === id)?.prenom;
+
         const conversations = new Map();
         for (const m of messages) {
           const autreId = m.expediteur_id === moi ? m.destinataire_id : m.expediteur_id;
-          const autrePrenom = m.expediteur_id === moi ? m.destinataire?.prenom : m.expediteur?.prenom;
           const cle = `${autreId}_${m.eleve_id}`;
           if (!conversations.has(cle)) {
-            conversations.set(cle, { autreId, autrePrenom, elevePrenom: m.eleve?.prenom, elevesId: m.eleve_id, messages: [] });
+            conversations.set(cle, { autreId, autrePrenom: nomDe(autreId), elevePrenom: nomDe(m.eleve_id), elevesId: m.eleve_id, messages: [] });
           }
           conversations.get(cle).messages.push(m);
         }

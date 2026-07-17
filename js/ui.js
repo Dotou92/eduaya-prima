@@ -44,6 +44,7 @@ const LIENS_PAR_ROLE = {
   super_admin: [
     { href: "/super-admin/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "accueil" },
     { href: "/super-admin/communes.html", id: "communes", label: "Communes & écoles", icone: "batiment" },
+    { href: "/super-admin/comptes.html", id: "comptes", label: "Comptes institutionnels", icone: "personnes" },
     { href: "/super-admin/ressources.html", id: "ressources-gestion", label: "Gérer les ressources", icone: "reglages" },
     { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "globe" },
   ],

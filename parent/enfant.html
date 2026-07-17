@@ -123,12 +123,24 @@
       ` : `<div class="vide">Aucune absence enregistrée.</div>`;
 
       // ---- Messagerie avec le(s) enseignant(s) de l'enfant ----
-      const { data: classesEnfant } = await supabase
-        .from("classe_eleves").select("classes(id, nom, enseignant_id, profiles(prenom, nom))").eq("eleve_id", enfantId);
+      const { data: classesEnfant, error: erreurClassesEnfant } = await supabase
+        .from("classe_eleves").select("classes(id, nom, enseignant_id)").eq("eleve_id", enfantId);
+      if (erreurClassesEnfant) console.error("Erreur classes de l'enfant :", erreurClassesEnfant);
+
+      const idsEnseignants = [...new Set((classesEnfant || []).map(c => c.classes?.enseignant_id).filter(Boolean))];
+      const { data: profilsEnseignants, error: erreurProfilsEns } = idsEnseignants.length
+        ? await supabase.from("profiles").select("id, prenom").in("id", idsEnseignants)
+        : { data: [] };
+      if (erreurProfilsEns) console.error("Erreur profils enseignants :", erreurProfilsEns);
+
       const enseignants = [...new Map(
         (classesEnfant || [])
           .filter(c => c.classes?.enseignant_id)
-          .map(c => [c.classes.enseignant_id, { id: c.classes.enseignant_id, prenom: c.classes.profiles?.prenom, classeNom: c.classes.nom }])
+          .map(c => [c.classes.enseignant_id, {
+            id: c.classes.enseignant_id,
+            prenom: (profilsEnseignants || []).find(p => p.id === c.classes.enseignant_id)?.prenom,
+            classeNom: c.classes.nom,
+          }])
       ).values()];
 
       const zoneMessagerie = document.getElementById("zone-messagerie");
@@ -149,11 +161,12 @@
 
         for (let idx = 0; idx < enseignants.length; idx++) {
           const ens = enseignants[idx];
-          const { data: msgs } = await supabase
+          const { data: msgs, error: erreurMsgs } = await supabase
             .from("messages").select("expediteur_id, contenu, created_at")
             .eq("eleve_id", enfantId)
             .or(`and(expediteur_id.eq.${contexte.user.id},destinataire_id.eq.${ens.id}),and(expediteur_id.eq.${ens.id},destinataire_id.eq.${contexte.user.id})`)
             .order("created_at");
+          if (erreurMsgs) console.error("Erreur chargement fil de messages :", erreurMsgs);
           const fil = document.getElementById(`fil-messages-${idx}`);
           fil.innerHTML = (msgs && msgs.length)
             ? msgs.map(m => `

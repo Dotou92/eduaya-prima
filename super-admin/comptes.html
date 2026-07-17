@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Comptes institutionnels — Super-Admin</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Super-Admin</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <h1>Comptes institutionnels</h1>
+      <p class="texte-att">Directeurs, agents communaux et agents numériques. En cas de mot de passe perdu (affiché une seule fois à la création), génère-en un nouveau ici.</p>
+
+      <div class="carte" id="carte-identifiants" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">🪪 Nouveau mot de passe</h3>
+        <p>Notez-le avant de fermer — il ne sera plus jamais affiché.</p>
+        <table class="tableau">
+          <tr><th>Email</th><td id="reset-email"></td></tr>
+          <tr><th>Nouveau mot de passe</th><td id="reset-mdp"></td></tr>
+        </table>
+      </div>
+
+      <div id="liste-comptes"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, afficherToast } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const NOMS_ROLE = { directeur: "Directeur", agent_commune: "Agent communal (Éducation)", agent_numerique: "Agent communal (Numérique)" };
+
+    const contexte = await exigerRole("super_admin");
+    if (contexte) {
+      initLayout({ role: "super_admin", actif: "comptes", profile: contexte.profile });
+
+      async function chargerComptes() {
+        const conteneur = document.getElementById("liste-comptes");
+        const { data: comptes, error } = await supabase.rpc("lister_comptes_institutionnels");
+        if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (!comptes || comptes.length === 0) {
+          conteneur.innerHTML = `<div class="vide">Aucun compte institutionnel pour l'instant.</div>`;
+          return;
+        }
+
+        conteneur.innerHTML = `
+          <div class="tableau-scroll">
+          <table class="tableau">
+            <thead><tr><th>Nom</th><th>Rôle</th><th>Email</th><th>École / Commune</th><th></th></tr></thead>
+            <tbody>
+              ${comptes.map(c => `
+                <tr>
+                  <td>${echapperHtml(c.prenom || "")} ${echapperHtml(c.nom || "")}</td>
+                  <td><span class="pastille pastille-gris">${NOMS_ROLE[c.role] || c.role}</span></td>
+                  <td><code>${echapperHtml(c.email)}</code></td>
+                  <td>${echapperHtml(c.ecole_nom || c.commune_nom || "—")}</td>
+                  <td><button class="bouton bouton-contour bouton-reinit" data-id="${c.id}" data-email="${echapperHtml(c.email)}">Réinitialiser le mot de passe</button></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+          </div>
+        `;
+
+        conteneur.querySelectorAll(".bouton-reinit").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            if (!confirm(`Générer un nouveau mot de passe pour ${btn.dataset.email} ? L'ancien cessera de fonctionner immédiatement.`)) return;
+            btn.disabled = true;
+            const { data: nouveauMdp, error: erreurReset } = await supabase.rpc("reinitialiser_mot_de_passe", { p_utilisateur_id: btn.dataset.id });
+            btn.disabled = false;
+            if (erreurReset) { afficherToast(erreurReset.message, "erreur"); return; }
+            document.getElementById("reset-email").textContent = btn.dataset.email;
+            document.getElementById("reset-mdp").textContent = nouveauMdp;
+            document.getElementById("carte-identifiants").style.display = "block";
+            document.getElementById("carte-identifiants").scrollIntoView({ behavior: "smooth" });
+            afficherToast("Mot de passe réinitialisé !", "succes");
+          });
+        });
+      }
+
+      chargerComptes();
+    }
+  </script>
+</body>
+</html>
