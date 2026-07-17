@@ -140,7 +140,7 @@
         const conteneur = document.getElementById("liste-eleves");
         const { data: inscriptions, error: erreurListe } = await supabase
           .from("classe_eleves")
-          .select("eleve_id, date_ajout, profiles(prenom, nom, code_liaison_parent)")
+          .select("eleve_id, date_ajout, profiles(prenom, nom, identifiant, code_liaison_parent)")
           .eq("classe_id", classeId);
 
         if (erreurListe) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${erreurListe.message}</div>`; return; }
@@ -149,12 +149,17 @@
           return;
         }
         conteneur.innerHTML = `
+          <p class="texte-att" style="margin-bottom:0.75rem;">
+            L'identifiant et le code parent restent visibles ici en permanence. Le code secret, lui,
+            n'est jamais réaffiché après sa création (par sécurité) — utilisez "Code secret perdu ?" pour en générer un nouveau.
+          </p>
           <table class="tableau">
-            <thead><tr><th>Prénom</th><th>Ajouté le</th><th>Code parent</th><th></th></tr></thead>
+            <thead><tr><th>Prénom</th><th>Identifiant</th><th>Ajouté le</th><th>Code parent</th><th></th></tr></thead>
             <tbody>
               ${inscriptions.map(i => `
                 <tr>
                   <td>${echapperHtml(i.profiles?.prenom || "—")}</td>
+                  <td><code>${echapperHtml(i.profiles?.identifiant || "—")}</code></td>
                   <td>${formaterDate(i.date_ajout)}</td>
                   <td><code>${i.profiles?.code_liaison_parent || "—"}</code></td>
                   <td><button class="bouton bouton-contour bouton-reinit-pin" data-id="${i.eleve_id}" data-prenom="${echapperHtml(i.profiles?.prenom || "")}">Code secret perdu ?</button></td>
