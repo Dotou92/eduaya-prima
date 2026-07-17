@@ -21,13 +21,20 @@
           <h1 id="titre-commune" class="mb-0">Commune</h1>
           <p class="texte-att mt-0" id="sous-titre-commune"></p>
         </div>
-        <button class="bouton bouton-accent" id="bouton-agent">+ Créer un compte agent communal</button>
+        <button class="bouton bouton-accent" id="bouton-agent">+ Créer un compte agent</button>
       </div>
 
       <div class="carte" id="carte-agent" style="display:none; margin-bottom: 1.5rem;">
-        <h3 class="mt-0">Créer un compte Agent communal</h3>
+        <h3 class="mt-0">Créer un compte agent communal</h3>
         <div id="alerte-agent"></div>
         <form id="form-agent" class="formulaire" style="max-width:none;">
+          <div class="champ">
+            <label for="agent-role">Type de compte</label>
+            <select id="agent-role">
+              <option value="agent_commune">Responsable communal de l'Éducation</option>
+              <option value="agent_numerique">Responsable communal du Numérique</option>
+            </select>
+          </div>
           <div class="champ"><label for="agent-prenom">Prénom</label><input type="text" id="agent-prenom" required /></div>
           <div class="champ"><label for="agent-nom">Nom</label><input type="text" id="agent-nom" required /></div>
           <div class="champ"><label for="agent-email">Adresse e-mail</label><input type="email" id="agent-email" required /></div>
@@ -36,7 +43,7 @@
       </div>
 
       <div class="carte" id="carte-identifiants-agent" style="display:none; margin-bottom: 1.5rem;">
-        <h3 class="mt-0">🪪 Identifiants à transmettre à l'agent communal</h3>
+        <h3 class="mt-0">🪪 Identifiants à transmettre à l'agent</h3>
         <p>Notez ces informations avant de fermer — le mot de passe ne sera plus jamais affiché.</p>
         <table class="tableau">
           <tr><th>Email</th><td id="agent-identifiant-email"></td></tr>
@@ -91,6 +98,7 @@
         bouton.disabled = true;
         document.getElementById("alerte-agent").innerHTML = "";
 
+        const roleChoisi = document.getElementById("agent-role").value;
         const prenom = document.getElementById("agent-prenom").value.trim();
         const nom = document.getElementById("agent-nom").value.trim();
         const email = document.getElementById("agent-email").value.trim();
@@ -99,7 +107,7 @@
         const clientJetable = creerClientJetable();
         const { data, error } = await clientJetable.auth.signUp({
           email, password: motDePasse,
-          options: { data: { role: "agent_commune", prenom, nom, commune_id: communeId } },
+          options: { data: { role: roleChoisi, prenom, nom, commune_id: communeId } },
         });
 
         bouton.disabled = false;
@@ -113,7 +121,7 @@
         document.getElementById("agent-identifiant-email").textContent = email;
         document.getElementById("agent-identifiant-mdp").textContent = motDePasse;
         document.getElementById("carte-identifiants-agent").style.display = "block";
-        afficherToast("Compte agent communal créé !", "succes");
+        afficherToast("Compte agent créé !", "succes");
       });
 
       // ---- Écoles ----

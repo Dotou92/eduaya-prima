@@ -20,6 +20,7 @@
         <h1 id="titre">Résultats de la classe</h1>
       </div>
       <div id="graphique-comparaison" class="carte" style="margin-bottom: 1.5rem;"><p class="texte-att">Chargement…</p></div>
+      <div id="eleves-a-risque" style="margin-bottom: 1.5rem;"></div>
       <div id="tableau-resultats"><p class="texte-att">Chargement…</p></div>
     </main>
   </div>
@@ -29,6 +30,7 @@
     import { initLayout, echapperHtml, parametreUrl } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
     import { graphiqueBarres } from "/js/charts.js";
+    import { icone } from "/js/icons.js";
 
     const classeId = parametreUrl("classe");
     const contexte = await exigerRole("enseignant");
@@ -66,6 +68,20 @@
 
         conteneurGraphique.innerHTML = `<h3 class="mt-0">Comparaison des élèves</h3><div id="graphique-inner"></div>`;
         graphiqueBarres(document.getElementById("graphique-inner"), lignes.map(l => ({ label: l.prenom, valeur: l.pourcentage })));
+
+        const aRisque = lignes.filter(l => l.pourcentage !== null && l.pourcentage < 50);
+        const conteneurRisque = document.getElementById("eleves-a-risque");
+        conteneurRisque.innerHTML = aRisque.length ? `
+          <div class="carte">
+            <h3 class="mt-0">⚠️ Élèves à suivre (score sous 50 %)</h3>
+            ${aRisque.map(l => `
+              <div class="flex items-center justify-between" style="margin-bottom:0.4rem;">
+                <span>${icone("alerte", 18)} ${echapperHtml(l.prenom)}</span>
+                <span class="pastille" style="background:var(--couleur-alerte-clair); color:var(--couleur-alerte);">${l.pourcentage}%</span>
+              </div>
+            `).join("")}
+          </div>
+        ` : "";
 
         conteneur.innerHTML = `
           <div class="tableau-scroll">

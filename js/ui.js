@@ -24,6 +24,7 @@ const LIENS_PAR_ROLE = {
     { href: "/enseignant/classes.html", id: "classes", label: "Mes classes", icone: "ecole" },
     { href: "/enseignant/lecons.html", id: "lecons", label: "Leçons", icone: "livre" },
     { href: "/enseignant/devoirs.html", id: "devoirs", label: "Devoirs", icone: "carnet" },
+    { href: "/enseignant/messages.html", id: "messages", label: "Messages", icone: "message" },
     { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "globe" },
   ],
   directeur: [
@@ -34,6 +35,10 @@ const LIENS_PAR_ROLE = {
   ],
   agent_commune: [
     { href: "/commune/tableau-de-bord.html", id: "tableau-de-bord", label: "Écoles de la commune", icone: "accueil" },
+    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "globe" },
+  ],
+  agent_numerique: [
+    { href: "/numerique/tableau-de-bord.html", id: "tableau-de-bord", label: "Utilisation par école", icone: "accueil" },
     { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "globe" },
   ],
   super_admin: [
@@ -50,6 +55,7 @@ const NOMS_ESPACE = {
   enseignant: "Espace Enseignant",
   directeur: "Espace Directeur",
   agent_commune: "Espace Commune",
+  agent_numerique: "Espace Numérique",
   super_admin: "Super-Admin",
 };
 
@@ -123,6 +129,24 @@ export function genererCode(longueur = 10) {
   let resultat = "";
   for (let i = 0; i < longueur; i++) resultat += alphabet[Math.floor(Math.random() * alphabet.length)];
   return resultat;
+}
+
+// Exporte un tableau d'objets en CSV et déclenche le téléchargement (aucune dépendance).
+export function exporterCSV(nomFichier, entetes, lignes) {
+  const echapperCellule = (v) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const contenu = [entetes, ...lignes].map(l => l.map(echapperCellule).join(";")).join("\r\n");
+  const blob = new Blob(["﻿" + contenu], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const lien = document.createElement("a");
+  lien.href = url;
+  lien.download = nomFichier.endsWith(".csv") ? nomFichier : `${nomFichier}.csv`;
+  document.body.appendChild(lien);
+  lien.click();
+  lien.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function echapperHtml(texte) {

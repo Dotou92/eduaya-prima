@@ -32,6 +32,12 @@
 
       <h2>Derniers exercices</h2>
       <div id="derniers-exercices"><p class="texte-att">Chargement…</p></div>
+
+      <h2 style="margin-top: 2rem;">Absences</h2>
+      <div id="liste-absences"><p class="texte-att">Chargement…</p></div>
+
+      <h2 style="margin-top: 2rem;">Contacter l'enseignant(e)</h2>
+      <div id="zone-messagerie"><p class="texte-att">Chargement…</p></div>
     </main>
   </div>
 
@@ -101,6 +107,77 @@
         </table>
         </div>
       ` : `<div class="vide">Aucun exercice fait pour l'instant.</div>`;
+
+      const { data: absences } = await supabase
+        .from("absences").select("date_absence, motif").eq("eleve_id", enfantId).order("date_absence", { ascending: false });
+      const conteneurAbsences = document.getElementById("liste-absences");
+      conteneurAbsences.innerHTML = (absences && absences.length) ? `
+        <div class="tableau-scroll">
+        <table class="tableau">
+          <thead><tr><th>Date</th><th>Motif</th></tr></thead>
+          <tbody>
+            ${absences.map(a => `<tr><td>${formaterDate(a.date_absence)}</td><td>${echapperHtml(a.motif || "—")}</td></tr>`).join("")}
+          </tbody>
+        </table>
+        </div>
+      ` : `<div class="vide">Aucune absence enregistrée.</div>`;
+
+      // ---- Messagerie avec le(s) enseignant(s) de l'enfant ----
+      const { data: classesEnfant } = await supabase
+        .from("classe_eleves").select("classes(id, nom, enseignant_id, profiles(prenom, nom))").eq("eleve_id", enfantId);
+      const enseignants = [...new Map(
+        (classesEnfant || [])
+          .filter(c => c.classes?.enseignant_id)
+          .map(c => [c.classes.enseignant_id, { id: c.classes.enseignant_id, prenom: c.classes.profiles?.prenom, classeNom: c.classes.nom }])
+      ).values()];
+
+      const zoneMessagerie = document.getElementById("zone-messagerie");
+      if (enseignants.length === 0) {
+        zoneMessagerie.innerHTML = `<div class="vide">Aucun enseignant identifié pour l'instant.</div>`;
+      } else {
+        zoneMessagerie.innerHTML = enseignants.map((ens, idx) => `
+          <div class="carte" style="margin-bottom:1rem;">
+            <h3 class="mt-0">${echapperHtml(ens.prenom || "Enseignant(e)")} — ${echapperHtml(ens.classeNom)}</h3>
+            <div id="fil-messages-${idx}" style="margin-bottom:0.75rem;"></div>
+            <form class="form-message" data-enseignant-id="${ens.id}" style="display:flex; gap:0.5rem;">
+              <input type="text" placeholder="Écrire un message…" required style="flex:1; padding:0.6rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);" />
+              <button type="submit" class="bouton bouton-primaire">Envoyer</button>
+            </form>
+          </div>
+        `).join("");
+
+        for (let idx = 0; idx < enseignants.length; idx++) {
+          const ens = enseignants[idx];
+          const { data: msgs } = await supabase
+            .from("messages").select("expediteur_id, contenu, created_at")
+            .eq("eleve_id", enfantId)
+            .or(`and(expediteur_id.eq.${contexte.user.id},destinataire_id.eq.${ens.id}),and(expediteur_id.eq.${ens.id},destinataire_id.eq.${contexte.user.id})`)
+            .order("created_at");
+          const fil = document.getElementById(`fil-messages-${idx}`);
+          fil.innerHTML = (msgs && msgs.length)
+            ? msgs.map(m => `
+                <p style="margin:0 0 0.4rem;"><strong>${m.expediteur_id === contexte.user.id ? "Vous" : echapperHtml(ens.prenom || "Enseignant(e)")}</strong>
+                <span class="texte-att">(${formaterDate(m.created_at)})</span> — ${echapperHtml(m.contenu)}</p>
+              `).join("")
+            : `<p class="texte-att">Aucun message pour l'instant.</p>`;
+        }
+
+        document.querySelectorAll(".form-message").forEach(form => {
+          form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const input = form.querySelector("input");
+            const contenu = input.value.trim();
+            if (!contenu) return;
+            const { error } = await supabase.from("messages").insert({
+              expediteur_id: contexte.user.id,
+              destinataire_id: form.dataset.enseignantId,
+              eleve_id: enfantId,
+              contenu,
+            });
+            if (!error) { input.value = ""; window.location.reload(); }
+          });
+        });
+      }
     }
   </script>
 </body>

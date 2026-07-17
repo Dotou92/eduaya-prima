@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Messages — Espace Enseignant</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Enseignant</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <h1>Messages des parents</h1>
+      <div id="liste-conversations"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, formaterDate } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("enseignant");
+    if (contexte) {
+      initLayout({ role: "enseignant", actif: "messages", profile: contexte.profile });
+
+      const moi = contexte.user.id;
+      const conteneur = document.getElementById("liste-conversations");
+
+      async function chargerConversations() {
+        const { data: messages, error } = await supabase
+          .from("messages")
+          .select(`
+            id, expediteur_id, destinataire_id, eleve_id, contenu, created_at,
+            expediteur:profiles!messages_expediteur_id_fkey(prenom),
+            destinataire:profiles!messages_destinataire_id_fkey(prenom),
+            eleve:profiles!messages_eleve_id_fkey(prenom)
+          `)
+          .or(`expediteur_id.eq.${moi},destinataire_id.eq.${moi}`)
+          .order("created_at");
+
+        if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (!messages || messages.length === 0) {
+          conteneur.innerHTML = `<div class="vide">Aucun message pour l'instant.</div>`;
+          return;
+        }
+
+        const conversations = new Map();
+        for (const m of messages) {
+          const autreId = m.expediteur_id === moi ? m.destinataire_id : m.expediteur_id;
+          const autrePrenom = m.expediteur_id === moi ? m.destinataire?.prenom : m.expediteur?.prenom;
+          const cle = `${autreId}_${m.eleve_id}`;
+          if (!conversations.has(cle)) {
+            conversations.set(cle, { autreId, autrePrenom, elevePrenom: m.eleve?.prenom, elevesId: m.eleve_id, messages: [] });
+          }
+          conversations.get(cle).messages.push(m);
+        }
+
+        conteneur.innerHTML = [...conversations.values()].map((conv, idx) => `
+          <div class="carte" style="margin-bottom:1rem;">
+            <h3 class="mt-0">${echapperHtml(conv.autrePrenom || "Parent")} — à propos de ${echapperHtml(conv.elevePrenom || "l'élève")}</h3>
+            <div style="margin-bottom:0.75rem;">
+              ${conv.messages.map(m => `
+                <p style="margin:0 0 0.4rem;"><strong>${m.expediteur_id === moi ? "Vous" : echapperHtml(conv.autrePrenom || "Parent")}</strong>
+                <span class="texte-att">(${formaterDate(m.created_at)})</span> — ${echapperHtml(m.contenu)}</p>
+              `).join("")}
+            </div>
+            <form class="form-reponse" data-autre-id="${conv.autreId}" data-eleve-id="${conv.elevesId}" style="display:flex; gap:0.5rem;">
+              <input type="text" placeholder="Répondre…" required style="flex:1; padding:0.6rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);" />
+              <button type="submit" class="bouton bouton-primaire">Envoyer</button>
+            </form>
+          </div>
+        `).join("");
+
+        conteneur.querySelectorAll(".form-reponse").forEach(form => {
+          form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const input = form.querySelector("input");
+            const contenu = input.value.trim();
+            if (!contenu) return;
+            const { error: erreurEnvoi } = await supabase.from("messages").insert({
+              expediteur_id: moi,
+              destinataire_id: form.dataset.autreId,
+              eleve_id: form.dataset.eleveId,
+              contenu,
+            });
+            if (!erreurEnvoi) { input.value = ""; chargerConversations(); }
+          });
+        });
+      }
+
+      chargerConversations();
+    }
+  </script>
+</body>
+</html>

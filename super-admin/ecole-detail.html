@@ -41,7 +41,10 @@
         </table>
       </div>
 
-      <h2>Classes rattachées</h2>
+      <div class="entete-page">
+        <h2 class="mb-0">Classes rattachées</h2>
+        <button class="bouton bouton-contour" id="bouton-export" style="display:none;">⬇ Exporter en CSV</button>
+      </div>
       <div id="graphique-comparaison" class="carte" style="margin-bottom: 1.5rem;"><p class="texte-att">Chargement…</p></div>
       <div id="tableau-classes"><p class="texte-att">Chargement…</p></div>
     </main>
@@ -49,7 +52,7 @@
 
   <script type="module">
     import { exigerRole } from "/js/auth.js";
-    import { initLayout, echapperHtml, parametreUrl, afficherToast, genererCode } from "/js/ui.js";
+    import { initLayout, echapperHtml, parametreUrl, afficherToast, genererCode, exporterCSV } from "/js/ui.js";
     import { supabase, creerClientJetable } from "/js/supabase-client.js";
     import { graphiqueBarres } from "/js/charts.js";
 
@@ -127,6 +130,14 @@
 
         conteneurGraphique.innerHTML = `<h3 class="mt-0">Comparaison des classes</h3><div id="graphique-inner"></div>`;
         graphiqueBarres(document.getElementById("graphique-inner"), lignes.map(l => ({ label: l.classe.nom, valeur: l.pct })));
+
+        const boutonExport = document.getElementById("bouton-export");
+        boutonExport.style.display = "inline-flex";
+        boutonExport.onclick = () => exporterCSV(
+          "classes-ecole",
+          ["Classe", "Niveau", "Élèves", "Score moyen (%)"],
+          lignes.map(l => [l.classe.nom, l.classe.niveaux?.code || "", l.nbEleves, l.pct ?? ""])
+        );
 
         conteneur.innerHTML = `
           <div class="tableau-scroll">

@@ -16,6 +16,8 @@ const ICONES = {
   reglages: `<circle cx="12" cy="12" r="3" ${TRACE}/><path ${TRACE} d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.4.6a7.7 7.7 0 0 0-1.7-1L15 3h-4l-.3 2.7a7.7 7.7 0 0 0-1.7 1l-2.4-.6-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.4-.6c.5.4 1.1.75 1.7 1L10 21h4l.3-2.7c.6-.25 1.2-.6 1.7-1l2.4.6 2-3.4-2-1.5Z"/>`,
   deconnexion: `<path ${TRACE} d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path ${TRACE} d="M16 17l5-5-5-5"/><path ${TRACE} d="M21 12H9"/>`,
   personnes: `<circle cx="9" cy="8" r="3" ${TRACE}/><path ${TRACE} d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="8.5" r="2.3" ${TRACE}/><path ${TRACE} d="M15.5 14.3c2.6.4 4.5 2.6 4.5 5.2"/>`,
+  message: `<path ${TRACE} d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v10a1.5 1.5 0 0 1-1.5 1.5H9l-4.5 4v-4H5.5A1.5 1.5 0 0 1 4 15.5v-10Z"/>`,
+  alerte: `<path ${TRACE} d="M12 3 2 20h20L12 3Z"/><path ${TRACE} d="M12 10v4"/><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"/>`,
 };
 
 // Retourne le HTML d'une icône (24x24 par défaut). `cle` doit exister dans ICONES.

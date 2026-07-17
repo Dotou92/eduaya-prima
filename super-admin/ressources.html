@@ -39,6 +39,9 @@
               <select id="source">
                 <option value="UNESCO">UNESCO</option>
                 <option value="UNICEF">UNICEF</option>
+                <option value="Banque Mondiale">Banque Mondiale</option>
+                <option value="CONFEMEN">CONFEMEN</option>
+                <option value="AUF">AUF</option>
                 <option value="Ministere">Ministère</option>
                 <option value="Partenaire">Partenaire</option>
               </select>
@@ -47,11 +50,22 @@
               <label for="categorie">Catégorie</label>
               <select id="categorie">
                 <option value="guide">Guide</option>
+                <option value="programme">Programme officiel</option>
                 <option value="rapport">Rapport</option>
                 <option value="recherche">Recherche</option>
                 <option value="recommandation">Recommandation</option>
                 <option value="formation">Formation</option>
               </select>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <div class="champ" style="flex:1;">
+              <label for="niveau">Niveau concerné (optionnel)</label>
+              <select id="niveau"><option value="">Tous niveaux</option></select>
+            </div>
+            <div class="champ" style="flex:1;">
+              <label for="matiere">Matière concernée (optionnel)</label>
+              <select id="matiere"><option value="">Toutes matières</option></select>
             </div>
           </div>
           <div class="champ">
@@ -70,10 +84,15 @@
     import { exigerRole } from "/js/auth.js";
     import { initLayout, echapperHtml, afficherToast, formaterDate } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
+    import { obtenirNiveaux, obtenirMatieres, optionsNiveaux, optionsMatieres } from "/js/reference-data.js";
 
     const contexte = await exigerRole("super_admin");
     if (contexte) {
       initLayout({ role: "super_admin", actif: "ressources-gestion", profile: contexte.profile });
+
+      const [niveaux, matieres] = await Promise.all([obtenirNiveaux(), obtenirMatieres()]);
+      document.getElementById("niveau").insertAdjacentHTML("beforeend", optionsNiveaux(niveaux));
+      document.getElementById("matiere").insertAdjacentHTML("beforeend", optionsMatieres(matieres));
 
       const carteFormulaire = document.getElementById("carte-formulaire");
       document.getElementById("bouton-nouvelle").addEventListener("click", () => {
@@ -83,7 +102,7 @@
       async function chargerRessources() {
         const conteneur = document.getElementById("liste-ressources");
         const { data: ressources, error } = await supabase
-          .from("ressources").select("*").order("created_at", { ascending: false });
+          .from("ressources").select("*, niveaux(code), matieres(icone, nom)").order("created_at", { ascending: false });
         if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
         if (!ressources || ressources.length === 0) {
           conteneur.innerHTML = `<div class="vide">Aucune ressource publiée.</div>`;
@@ -94,6 +113,8 @@
             <div>
               <span class="pastille pastille-vert">${echapperHtml(r.source)}</span>
               <span class="pastille pastille-gris">${echapperHtml(r.categorie || "")}</span>
+              ${r.niveaux ? `<span class="pastille pastille-jaune">${r.niveaux.code}</span>` : ""}
+              ${r.matieres ? `<span class="pastille pastille-gris">${r.matieres.icone || ""} ${echapperHtml(r.matieres.nom)}</span>` : ""}
               <h3 class="mb-0">${echapperHtml(r.titre)}</h3>
               <p class="mb-0 texte-att">${formaterDate(r.created_at)} — <a href="${r.lien_url}" target="_blank" rel="noopener">Voir le document</a></p>
             </div>
@@ -115,10 +136,12 @@
         const description = document.getElementById("description").value.trim() || null;
         const source = document.getElementById("source").value;
         const categorie = document.getElementById("categorie").value;
+        const niveau_id = document.getElementById("niveau").value || null;
+        const matiere_id = document.getElementById("matiere").value || null;
         const lien_url = document.getElementById("lien").value.trim();
 
         const { error } = await supabase.from("ressources").insert({
-          titre, description, source, categorie, lien_url, publie_par: contexte.user.id,
+          titre, description, source, categorie, niveau_id, matiere_id, lien_url, publie_par: contexte.user.id,
         });
 
         if (error) {

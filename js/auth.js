@@ -9,6 +9,7 @@ export const TABLEAUX_DE_BORD = {
   enseignant: "/enseignant/tableau-de-bord.html",
   directeur: "/directeur/tableau-de-bord.html",
   agent_commune: "/commune/tableau-de-bord.html",
+  agent_numerique: "/numerique/tableau-de-bord.html",
   super_admin: "/super-admin/tableau-de-bord.html",
 };
 

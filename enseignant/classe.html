@@ -49,6 +49,16 @@
         </table>
       </div>
 
+      <div class="carte" id="carte-absence" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">Signaler une absence — <span id="absence-prenom"></span></h3>
+        <div id="alerte-absence"></div>
+        <form id="form-absence" class="formulaire" style="max-width:none;">
+          <div class="champ"><label for="absence-date">Date</label><input type="date" id="absence-date" required /></div>
+          <div class="champ"><label for="absence-motif">Motif (optionnel)</label><input type="text" id="absence-motif" placeholder="ex : maladie" /></div>
+          <button type="submit" class="bouton bouton-primaire" id="bouton-envoyer-absence">Enregistrer l'absence</button>
+        </form>
+      </div>
+
       <h2>Élèves de la classe</h2>
       <div id="liste-eleves"><p class="texte-att">Chargement…</p></div>
 
@@ -81,6 +91,30 @@
       const carteFormulaire = document.getElementById("carte-formulaire");
       document.getElementById("bouton-ajouter-eleve").addEventListener("click", () => {
         carteFormulaire.style.display = carteFormulaire.style.display === "none" ? "block" : "none";
+      });
+
+      document.getElementById("form-absence").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const bouton = document.getElementById("bouton-envoyer-absence");
+        bouton.disabled = true;
+        document.getElementById("alerte-absence").innerHTML = "";
+
+        const { error } = await supabase.from("absences").insert({
+          eleve_id: form.dataset.eleveId,
+          date_absence: document.getElementById("absence-date").value,
+          motif: document.getElementById("absence-motif").value.trim() || null,
+          signale_par: contexte.user.id,
+        });
+
+        bouton.disabled = false;
+        if (error) {
+          document.getElementById("alerte-absence").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+          return;
+        }
+        form.reset();
+        document.getElementById("carte-absence").style.display = "none";
+        afficherToast("Absence enregistrée.", "succes");
       });
 
       function slugifier(texte) {
@@ -155,7 +189,7 @@
           </p>
           <div class="tableau-scroll">
           <table class="tableau">
-            <thead><tr><th>Prénom</th><th>Identifiant</th><th>Ajouté le</th><th>Code parent</th><th></th></tr></thead>
+            <thead><tr><th>Prénom</th><th>Identifiant</th><th>Ajouté le</th><th>Code parent</th><th></th><th></th></tr></thead>
             <tbody>
               ${inscriptions.map(i => `
                 <tr>
@@ -164,6 +198,7 @@
                   <td>${formaterDate(i.date_ajout)}</td>
                   <td><code>${i.profiles?.code_liaison_parent || "—"}</code></td>
                   <td><button class="bouton bouton-contour bouton-reinit-pin" data-id="${i.eleve_id}" data-prenom="${echapperHtml(i.profiles?.prenom || "")}">Code secret perdu ?</button></td>
+                  <td><button class="bouton bouton-contour bouton-absence" data-id="${i.eleve_id}" data-prenom="${echapperHtml(i.profiles?.prenom || "")}">+ Absence</button></td>
                 </tr>
               `).join("")}
             </tbody>
@@ -184,6 +219,17 @@
             document.getElementById("carte-identifiants").style.display = "block";
             document.getElementById("carte-identifiants").scrollIntoView({ behavior: "smooth" });
             afficherToast("Nouveau code secret généré !", "succes");
+          });
+        });
+
+        const carteAbsence = document.getElementById("carte-absence");
+        conteneur.querySelectorAll(".bouton-absence").forEach(btn => {
+          btn.addEventListener("click", () => {
+            document.getElementById("absence-prenom").textContent = btn.dataset.prenom;
+            document.getElementById("form-absence").dataset.eleveId = btn.dataset.id;
+            document.getElementById("absence-date").value = new Date().toISOString().slice(0, 10);
+            carteAbsence.style.display = "block";
+            carteAbsence.scrollIntoView({ behavior: "smooth" });
           });
         });
       }

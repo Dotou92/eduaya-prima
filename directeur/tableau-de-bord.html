@@ -41,14 +41,22 @@
           <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-score">—</div><div class="carte-stat__label">Score moyen école</div></div>
         </div>
       </div>
+
+      <h2 style="margin-top: 2rem;">Résultats par matière</h2>
+      <div id="detail-matieres"><p class="texte-att">Chargement…</p></div>
+
+      <h2 style="margin-top: 2rem;">⚠️ Élèves à suivre</h2>
+      <p class="texte-att">Élèves ayant fait au moins un exercice, avec un score moyen inférieur à 50 % — détection simple par seuil, en attendant l'analyse par IA.</p>
+      <div id="eleves-a-risque"><p class="texte-att">Chargement…</p></div>
     </main>
   </div>
 
   <script type="module">
     import { exigerRole } from "/js/auth.js";
-    import { initLayout } from "/js/ui.js";
+    import { initLayout, echapperHtml } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
     import { icone } from "/js/icons.js";
+    import { obtenirMatieres } from "/js/reference-data.js";
 
     const contexte = await exigerRole("directeur");
     if (contexte) {
@@ -73,7 +81,7 @@
       const eleveIds = [...new Set((inscriptions || []).map(i => i.eleve_id))];
 
       const { data: tentatives } = eleveIds.length
-        ? await supabase.from("tentatives").select("score, score_max").in("eleve_id", eleveIds)
+        ? await supabase.from("tentatives").select("eleve_id, score, score_max, exercices(matiere_id)").in("eleve_id", eleveIds)
         : { data: [] };
       const totalScore = (tentatives || []).reduce((s, t) => s + Number(t.score), 0);
       const totalMax = (tentatives || []).reduce((s, t) => s + Number(t.score_max), 0);
@@ -83,6 +91,53 @@
       document.getElementById("stat-enseignants").textContent = nbEnseignants;
       document.getElementById("stat-eleves").textContent = eleveIds.length;
       document.getElementById("stat-score").textContent = pourcentage === null ? "—" : `${pourcentage}%`;
+
+      const matieres = await obtenirMatieres();
+      document.getElementById("detail-matieres").innerHTML = matieres.map(m => {
+        const mesTentatives = (tentatives || []).filter(t => t.exercices?.matiere_id === m.id);
+        const s = mesTentatives.reduce((s, t) => s + Number(t.score), 0);
+        const max = mesTentatives.reduce((s, t) => s + Number(t.score_max), 0);
+        const pct = max > 0 ? Math.round((s / max) * 100) : 0;
+        return `
+          <div class="carte" style="margin-bottom:0.75rem;">
+            <div class="flex items-center justify-between" style="margin-bottom:0.5rem;">
+              <strong>${m.icone} ${echapperHtml(m.nom)}</strong>
+              <span class="texte-att">${max > 0 ? `${pct}%` : "Pas encore de données"}</span>
+            </div>
+            <div class="barre-progres"><div class="barre-progres__valeur" style="width:${pct}%;"></div></div>
+          </div>
+        `;
+      }).join("");
+
+      const SEUIL_RISQUE = 50;
+      const parEleve = new Map();
+      for (const t of tentatives || []) {
+        if (!parEleve.has(t.eleve_id)) parEleve.set(t.eleve_id, { score: 0, max: 0 });
+        const acc = parEleve.get(t.eleve_id);
+        acc.score += Number(t.score);
+        acc.max += Number(t.score_max);
+      }
+      const idsARisque = [...parEleve.entries()]
+        .filter(([, acc]) => acc.max > 0 && Math.round((acc.score / acc.max) * 100) < SEUIL_RISQUE)
+        .map(([id, acc]) => ({ id, pct: Math.round((acc.score / acc.max) * 100) }));
+
+      const conteneurRisque = document.getElementById("eleves-a-risque");
+      if (idsARisque.length === 0) {
+        conteneurRisque.innerHTML = `<div class="vide">Aucun élève sous le seuil pour l'instant.</div>`;
+      } else {
+        const { data: profilsARisque } = await supabase.from("profiles").select("id, prenom").in("id", idsARisque.map(e => e.id));
+        conteneurRisque.innerHTML = idsARisque
+          .sort((a, b) => a.pct - b.pct)
+          .map(e => {
+            const profil = (profilsARisque || []).find(p => p.id === e.id);
+            return `
+              <div class="carte flex items-center justify-between" style="margin-bottom:0.5rem;">
+                <span>${icone("alerte", 18)} ${echapperHtml(profil?.prenom || "Élève")}</span>
+                <span class="pastille" style="background:var(--couleur-alerte-clair); color:var(--couleur-alerte);">${e.pct}%</span>
+              </div>
+            `;
+          }).join("");
+      }
     }
   </script>
 </body>

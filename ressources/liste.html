@@ -25,16 +25,26 @@
           <option value="">Toutes les sources</option>
           <option value="UNESCO">UNESCO</option>
           <option value="UNICEF">UNICEF</option>
+          <option value="Banque Mondiale">Banque Mondiale</option>
+          <option value="CONFEMEN">CONFEMEN</option>
+          <option value="AUF">AUF</option>
           <option value="Ministere">Ministère</option>
           <option value="Partenaire">Partenaire</option>
         </select>
         <select id="filtre-categorie" class="champ" style="padding:0.5rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);">
           <option value="">Toutes les catégories</option>
           <option value="guide">Guide</option>
+          <option value="programme">Programme officiel</option>
           <option value="rapport">Rapport</option>
           <option value="recherche">Recherche</option>
           <option value="recommandation">Recommandation</option>
           <option value="formation">Formation</option>
+        </select>
+        <select id="filtre-niveau" class="champ" style="padding:0.5rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);">
+          <option value="">Tous niveaux</option>
+        </select>
+        <select id="filtre-matiere" class="champ" style="padding:0.5rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);">
+          <option value="">Toutes matières</option>
         </select>
       </div>
 
@@ -46,24 +56,36 @@
     import { exigerRole } from "/js/auth.js";
     import { initLayout, echapperHtml, formaterDate } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
+    import { obtenirNiveaux, obtenirMatieres, optionsNiveaux, optionsMatieres } from "/js/reference-data.js";
 
-    const contexte = await exigerRole(["enseignant", "directeur", "agent_commune", "super_admin"]);
+    const contexte = await exigerRole(["enseignant", "directeur", "agent_commune", "agent_numerique", "super_admin"]);
     if (contexte) {
       initLayout({ role: contexte.profile.role, actif: "ressources", profile: contexte.profile });
+
+      const [niveaux, matieres] = await Promise.all([obtenirNiveaux(), obtenirMatieres()]);
+      document.getElementById("filtre-niveau").insertAdjacentHTML("beforeend", optionsNiveaux(niveaux));
+      document.getElementById("filtre-matiere").insertAdjacentHTML("beforeend", optionsMatieres(matieres));
 
       let toutesLesRessources = [];
 
       function rendre() {
         const source = document.getElementById("filtre-source").value;
         const categorie = document.getElementById("filtre-categorie").value;
+        const niveauId = document.getElementById("filtre-niveau").value;
+        const matiereId = document.getElementById("filtre-matiere").value;
         const filtrees = toutesLesRessources.filter(r =>
-          (!source || r.source === source) && (!categorie || r.categorie === categorie)
+          (!source || r.source === source)
+          && (!categorie || r.categorie === categorie)
+          && (!niveauId || r.niveau_id == niveauId)
+          && (!matiereId || r.matiere_id == matiereId)
         );
         const conteneur = document.getElementById("liste-ressources");
         conteneur.innerHTML = filtrees.length ? filtrees.map(r => `
           <div class="carte">
             <span class="pastille pastille-vert">${echapperHtml(r.source)}</span>
             <span class="pastille pastille-gris">${echapperHtml(r.categorie || "")}</span>
+            ${r.niveaux ? `<span class="pastille pastille-jaune">${r.niveaux.code}</span>` : ""}
+            ${r.matieres ? `<span class="pastille pastille-gris">${r.matieres.icone || ""} ${echapperHtml(r.matieres.nom)}</span>` : ""}
             <h3>${echapperHtml(r.titre)}</h3>
             <p>${echapperHtml(r.description || "")}</p>
             <p class="texte-att mb-0">${formaterDate(r.created_at)}</p>
@@ -72,7 +94,7 @@
         `).join("") : `<div class="vide">Aucune ressource ne correspond à ce filtre.</div>`;
       }
 
-      const { data, error } = await supabase.from("ressources").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("ressources").select("*, niveaux(code), matieres(icone, nom)").order("created_at", { ascending: false });
       if (error) {
         document.getElementById("liste-ressources").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
       } else {
@@ -82,6 +104,8 @@
 
       document.getElementById("filtre-source").addEventListener("change", rendre);
       document.getElementById("filtre-categorie").addEventListener("change", rendre);
+      document.getElementById("filtre-niveau").addEventListener("change", rendre);
+      document.getElementById("filtre-matiere").addEventListener("change", rendre);
     }
   </script>
 </body>
