@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tableau de bord — Super-Admin</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Super-Admin</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1 id="titre-bienvenue">Bonjour 👋</h1>
+        <a href="/super-admin/communes.html" class="bouton bouton-primaire">Gérer communes & écoles</a>
+      </div>
+
+      <div class="grille">
+        <div class="carte">
+          <div class="texte-att">Communes</div>
+          <h2 id="stat-communes" class="mt-0 mb-0">—</h2>
+        </div>
+        <div class="carte">
+          <div class="texte-att">Écoles</div>
+          <h2 id="stat-ecoles" class="mt-0 mb-0">—</h2>
+        </div>
+        <div class="carte">
+          <div class="texte-att">Directeurs</div>
+          <h2 id="stat-directeurs" class="mt-0 mb-0">—</h2>
+        </div>
+        <div class="carte">
+          <div class="texte-att">Agents communaux</div>
+          <h2 id="stat-agents" class="mt-0 mb-0">—</h2>
+        </div>
+        <div class="carte">
+          <div class="texte-att">Ressources publiées</div>
+          <h2 id="stat-ressources" class="mt-0 mb-0">—</h2>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("super_admin");
+    if (contexte) {
+      initLayout({ role: "super_admin", actif: "tableau-de-bord", profile: contexte.profile });
+      document.getElementById("titre-bienvenue").textContent = `Bonjour ${contexte.profile.prenom} 👋`;
+
+      const [
+        { count: nbCommunes },
+        { count: nbEcoles },
+        { count: nbDirecteurs },
+        { count: nbAgents },
+        { count: nbRessources },
+      ] = await Promise.all([
+        supabase.from("communes").select("id", { count: "exact", head: true }),
+        supabase.from("ecoles").select("id", { count: "exact", head: true }),
+        supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "directeur"),
+        supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "agent_commune"),
+        supabase.from("ressources").select("id", { count: "exact", head: true }),
+      ]);
+
+      document.getElementById("stat-communes").textContent = nbCommunes ?? 0;
+      document.getElementById("stat-ecoles").textContent = nbEcoles ?? 0;
+      document.getElementById("stat-directeurs").textContent = nbDirecteurs ?? 0;
+      document.getElementById("stat-agents").textContent = nbAgents ?? 0;
+      document.getElementById("stat-ressources").textContent = nbRessources ?? 0;
+    }
+  </script>
+</body>
+</html>

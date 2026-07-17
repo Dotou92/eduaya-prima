@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ressources UNESCO / partenaires — EduAya Prima</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Ressources</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1>🌍 Ressources UNESCO & partenaires</h1>
+      </div>
+
+      <div class="flex gap-1" style="margin-bottom: 1.5rem; flex-wrap: wrap;">
+        <select id="filtre-source" class="champ" style="padding:0.5rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);">
+          <option value="">Toutes les sources</option>
+          <option value="UNESCO">UNESCO</option>
+          <option value="UNICEF">UNICEF</option>
+          <option value="Ministere">Ministère</option>
+          <option value="Partenaire">Partenaire</option>
+        </select>
+        <select id="filtre-categorie" class="champ" style="padding:0.5rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);">
+          <option value="">Toutes les catégories</option>
+          <option value="guide">Guide</option>
+          <option value="rapport">Rapport</option>
+          <option value="recherche">Recherche</option>
+          <option value="recommandation">Recommandation</option>
+          <option value="formation">Formation</option>
+        </select>
+      </div>
+
+      <div id="liste-ressources" class="grille"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, formaterDate } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole(["enseignant", "directeur", "agent_commune", "super_admin"]);
+    if (contexte) {
+      initLayout({ role: contexte.profile.role, actif: "ressources", profile: contexte.profile });
+
+      let toutesLesRessources = [];
+
+      function rendre() {
+        const source = document.getElementById("filtre-source").value;
+        const categorie = document.getElementById("filtre-categorie").value;
+        const filtrees = toutesLesRessources.filter(r =>
+          (!source || r.source === source) && (!categorie || r.categorie === categorie)
+        );
+        const conteneur = document.getElementById("liste-ressources");
+        conteneur.innerHTML = filtrees.length ? filtrees.map(r => `
+          <div class="carte">
+            <span class="pastille pastille-vert">${echapperHtml(r.source)}</span>
+            <span class="pastille pastille-gris">${echapperHtml(r.categorie || "")}</span>
+            <h3>${echapperHtml(r.titre)}</h3>
+            <p>${echapperHtml(r.description || "")}</p>
+            <p class="texte-att mb-0">${formaterDate(r.created_at)}</p>
+            <a class="bouton bouton-primaire bouton-bloc" href="${r.lien_url}" target="_blank" rel="noopener" style="margin-top:0.75rem;">Consulter le document</a>
+          </div>
+        `).join("") : `<div class="vide">Aucune ressource ne correspond à ce filtre.</div>`;
+      }
+
+      const { data, error } = await supabase.from("ressources").select("*").order("created_at", { ascending: false });
+      if (error) {
+        document.getElementById("liste-ressources").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+      } else {
+        toutesLesRessources = data || [];
+        rendre();
+      }
+
+      document.getElementById("filtre-source").addEventListener("change", rendre);
+      document.getElementById("filtre-categorie").addEventListener("change", rendre);
+    }
+  </script>
+</body>
+</html>

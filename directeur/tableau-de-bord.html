@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tableau de bord — Espace Directeur</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Directeur</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <div>
+          <h1 id="titre-bienvenue" class="mb-0">Bonjour 👋</h1>
+          <p class="texte-att mt-0" id="nom-ecole"></p>
+        </div>
+      </div>
+
+      <div class="grille">
+        <div class="carte">
+          <div class="texte-att">Classes</div>
+          <h2 id="stat-classes" class="mt-0 mb-0">—</h2>
+        </div>
+        <div class="carte">
+          <div class="texte-att">Enseignants</div>
+          <h2 id="stat-enseignants" class="mt-0 mb-0">—</h2>
+        </div>
+        <div class="carte">
+          <div class="texte-att">Élèves</div>
+          <h2 id="stat-eleves" class="mt-0 mb-0">—</h2>
+        </div>
+        <div class="carte">
+          <div class="texte-att">Score moyen école</div>
+          <h2 id="stat-score" class="mt-0 mb-0">—</h2>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("directeur");
+    if (contexte) {
+      initLayout({ role: "directeur", actif: "tableau-de-bord", profile: contexte.profile });
+      document.getElementById("titre-bienvenue").textContent = `Bonjour ${contexte.profile.prenom} 👋`;
+
+      const ecoleId = contexte.profile.ecole_id;
+      const { data: ecole } = await supabase.from("ecoles").select("nom").eq("id", ecoleId).single();
+      document.getElementById("nom-ecole").textContent = ecole?.nom || "";
+
+      const { data: classes } = await supabase.from("classes").select("id, enseignant_id").eq("ecole_id", ecoleId);
+      const classeIds = (classes || []).map(c => c.id);
+      const nbEnseignants = new Set((classes || []).map(c => c.enseignant_id)).size;
+
+      const { data: inscriptions } = classeIds.length
+        ? await supabase.from("classe_eleves").select("eleve_id").in("classe_id", classeIds)
+        : { data: [] };
+      const eleveIds = [...new Set((inscriptions || []).map(i => i.eleve_id))];
+
+      const { data: tentatives } = eleveIds.length
+        ? await supabase.from("tentatives").select("score, score_max").in("eleve_id", eleveIds)
+        : { data: [] };
+      const totalScore = (tentatives || []).reduce((s, t) => s + Number(t.score), 0);
+      const totalMax = (tentatives || []).reduce((s, t) => s + Number(t.score_max), 0);
+      const pourcentage = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : null;
+
+      document.getElementById("stat-classes").textContent = classes?.length ?? 0;
+      document.getElementById("stat-enseignants").textContent = nbEnseignants;
+      document.getElementById("stat-eleves").textContent = eleveIds.length;
+      document.getElementById("stat-score").textContent = pourcentage === null ? "—" : `${pourcentage}%`;
+    }
+  </script>
+</body>
+</html>

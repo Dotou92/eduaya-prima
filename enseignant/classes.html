@@ -37,6 +37,11 @@
             <label for="annee">Année scolaire</label>
             <input type="text" id="annee" required placeholder="ex : 2025-2026" />
           </div>
+          <div class="champ">
+            <label for="ecole">École (optionnel)</label>
+            <select id="ecole"><option value="">Non rattachée</option></select>
+            <small>Rattacher la classe à une école la rend visible au directeur et à la commune.</small>
+          </div>
           <button type="submit" class="bouton bouton-primaire">Créer la classe</button>
         </form>
       </div>
@@ -62,6 +67,11 @@
 
       const niveaux = await obtenirNiveaux();
       document.getElementById("niveau").innerHTML = optionsNiveaux(niveaux);
+
+      const { data: ecoles } = await supabase.from("ecoles").select("id, nom, communes(nom)").order("nom");
+      const selectEcole = document.getElementById("ecole");
+      (ecoles || []).forEach(e => selectEcole.insertAdjacentHTML("beforeend",
+        `<option value="${e.id}">${e.nom}${e.communes?.nom ? ` (${e.communes.nom})` : ""}</option>`));
 
       async function chargerClasses() {
         const liste = document.getElementById("liste-classes");
@@ -90,8 +100,9 @@
         const nom = document.getElementById("nom").value.trim();
         const niveau_id = document.getElementById("niveau").value;
         const annee_scolaire = document.getElementById("annee").value.trim();
+        const ecole_id = document.getElementById("ecole").value || null;
         const { error } = await supabase.from("classes").insert({
-          nom, niveau_id, annee_scolaire, enseignant_id: contexte.user.id,
+          nom, niveau_id, annee_scolaire, ecole_id, enseignant_id: contexte.user.id,
         });
         if (error) {
           document.getElementById("alerte-zone").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;

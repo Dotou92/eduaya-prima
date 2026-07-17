@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Amorçage super-admin — EduAya Prima</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main class="conteneur-etroit" style="padding: 3rem 0;">
+    <div class="texte-centre" style="margin-bottom: 1.5rem;">
+      <a href="/" style="text-decoration: none; color: inherit; font-weight: 800; font-size: 1.2rem;">🎓 EduAya Prima</a>
+    </div>
+
+    <div class="carte">
+      <h2>Créer le compte super-administrateur</h2>
+      <p class="texte-att">
+        Cette page n'est pas liée dans le site — elle sert uniquement à créer <strong>le tout premier</strong>
+        compte super-admin. Les comptes directeur et agent communal suivants se créent ensuite depuis
+        l'espace super-admin lui-même.
+      </p>
+      <div id="alerte-zone"></div>
+      <form id="form-inscription" class="formulaire" style="max-width:none;">
+        <div class="champ">
+          <label for="prenom">Prénom</label>
+          <input type="text" id="prenom" required />
+        </div>
+        <div class="champ">
+          <label for="nom">Nom</label>
+          <input type="text" id="nom" required />
+        </div>
+        <div class="champ">
+          <label for="email">Adresse e-mail</label>
+          <input type="email" id="email" required autocomplete="email" />
+        </div>
+        <div class="champ">
+          <label for="mot-de-passe">Mot de passe</label>
+          <input type="password" id="mot-de-passe" required minlength="6" autocomplete="new-password" />
+          <small>6 caractères minimum.</small>
+        </div>
+        <button type="submit" class="bouton bouton-primaire bouton-bloc bouton-grand" id="bouton-envoyer">Créer le compte super-admin</button>
+      </form>
+    </div>
+  </main>
+
+  <script type="module">
+    import { supabase } from "/js/supabase-client.js";
+
+    const form = document.getElementById("form-inscription");
+    const alerteZone = document.getElementById("alerte-zone");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const bouton = document.getElementById("bouton-envoyer");
+      bouton.disabled = true;
+      alerteZone.innerHTML = "";
+
+      const prenom = document.getElementById("prenom").value.trim();
+      const nom = document.getElementById("nom").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const motDePasse = document.getElementById("mot-de-passe").value;
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: motDePasse,
+        options: { data: { role: "super_admin", prenom, nom } },
+      });
+
+      bouton.disabled = false;
+
+      if (error) {
+        alerteZone.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+        return;
+      }
+
+      if (!data.session) {
+        alerteZone.innerHTML = `<div class="alerte alerte-info">Compte créé. Vérifiez votre boîte mail pour confirmer votre adresse, puis connectez-vous via /auth/login.html.</div>`;
+        return;
+      }
+
+      window.location.href = "/super-admin/tableau-de-bord.html";
+    });
+  </script>
+</body>
+</html>

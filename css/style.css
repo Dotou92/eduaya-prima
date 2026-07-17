@@ -31,6 +31,12 @@
   --accent-parent-clair: #e6effb;
   --accent-enseignant: #00873e;
   --accent-enseignant-clair: #e4f5ea;
+  --accent-directeur: #6f42c1;
+  --accent-directeur-clair: #f0e9fb;
+  --accent-commune: #0d7a7a;
+  --accent-commune-clair: #e2f4f4;
+  --accent-super-admin: #52605c;
+  --accent-super-admin-clair: #eef1ec;
 
   --rayon: 14px;
   --rayon-petit: 8px;
@@ -184,6 +190,9 @@ img, svg { max-width: 100%; }
 body.espace-ecolier { --espace: var(--couleur-accent-fonce); --espace-clair: var(--accent-ecolier-clair); }
 body.espace-parent { --espace: var(--accent-parent); --espace-clair: var(--accent-parent-clair); }
 body.espace-enseignant { --espace: var(--accent-enseignant); --espace-clair: var(--accent-enseignant-clair); }
+body.espace-directeur { --espace: var(--accent-directeur); --espace-clair: var(--accent-directeur-clair); }
+body.espace-agent_commune { --espace: var(--accent-commune); --espace-clair: var(--accent-commune-clair); }
+body.espace-super_admin { --espace: var(--accent-super-admin); --espace-clair: var(--accent-super-admin-clair); }
 
 /* ---------- Composants ---------- */
 

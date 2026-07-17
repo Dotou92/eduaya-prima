@@ -23,10 +23,34 @@ const LIENS_PAR_ROLE = {
     { href: "/enseignant/classes.html", id: "classes", label: "Mes classes", icone: "🏫" },
     { href: "/enseignant/lecons.html", id: "lecons", label: "Leçons", icone: "📘" },
     { href: "/enseignant/devoirs.html", id: "devoirs", label: "Devoirs", icone: "📝" },
+    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "🌍" },
+  ],
+  directeur: [
+    { href: "/directeur/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "🏠" },
+    { href: "/directeur/classes.html", id: "classes", label: "Classes de l'école", icone: "🏫" },
+    { href: "/directeur/resultats.html", id: "resultats", label: "Résultats", icone: "📊" },
+    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "🌍" },
+  ],
+  agent_commune: [
+    { href: "/commune/tableau-de-bord.html", id: "tableau-de-bord", label: "Écoles de la commune", icone: "🏠" },
+    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "🌍" },
+  ],
+  super_admin: [
+    { href: "/super-admin/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "🏠" },
+    { href: "/super-admin/communes.html", id: "communes", label: "Communes & écoles", icone: "🏛️" },
+    { href: "/super-admin/ressources.html", id: "ressources-gestion", label: "Gérer les ressources", icone: "🌍" },
+    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "📚" },
   ],
 };
 
-const NOMS_ESPACE = { ecolier: "Espace Écolier", parent: "Espace Parent", enseignant: "Espace Enseignant" };
+const NOMS_ESPACE = {
+  ecolier: "Espace Écolier",
+  parent: "Espace Parent",
+  enseignant: "Espace Enseignant",
+  directeur: "Espace Directeur",
+  agent_commune: "Espace Commune",
+  super_admin: "Super-Admin",
+};
 
 // Construit la nav latérale + la barre mobile, et branche déconnexion/affichage profil.
 // role: 'ecolier' | 'parent' | 'enseignant' — actif: id du lien courant.
@@ -91,6 +115,13 @@ export function parametreUrl(nom) {
 export function formaterDate(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+export function genererCode(longueur = 10) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let resultat = "";
+  for (let i = 0; i < longueur; i++) resultat += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return resultat;
 }
 
 export function echapperHtml(texte) {

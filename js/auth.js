@@ -7,6 +7,9 @@ export const TABLEAUX_DE_BORD = {
   ecolier: "/ecolier/tableau-de-bord.html",
   parent: "/parent/tableau-de-bord.html",
   enseignant: "/enseignant/tableau-de-bord.html",
+  directeur: "/directeur/tableau-de-bord.html",
+  agent_commune: "/commune/tableau-de-bord.html",
+  super_admin: "/super-admin/tableau-de-bord.html",
 };
 
 // Récupère la session active et le profil associé (table `profiles`).
@@ -25,6 +28,8 @@ export async function obtenirSessionEtProfil() {
 }
 
 // À appeler en haut de chaque page protégée. Redirige si non connecté ou mauvais rôle.
+// roleAttendu peut être une chaîne ("enseignant") ou un tableau de rôles autorisés
+// (["enseignant", "directeur"]) pour les pages partagées entre plusieurs rôles.
 // Retourne { user, profile } si tout est en ordre.
 export async function exigerRole(roleAttendu) {
   const contexte = await obtenirSessionEtProfil();
@@ -32,7 +37,8 @@ export async function exigerRole(roleAttendu) {
     window.location.href = "/auth/login.html";
     return null;
   }
-  if (contexte.profile.role !== roleAttendu) {
+  const rolesAutorises = Array.isArray(roleAttendu) ? roleAttendu : [roleAttendu];
+  if (!rolesAutorises.includes(contexte.profile.role)) {
     window.location.href = TABLEAUX_DE_BORD[contexte.profile.role] || "/auth/login.html";
     return null;
   }

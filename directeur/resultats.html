@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Résultats de l'école — Espace Directeur</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Directeur</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <h1>Résultats par classe</h1>
+      <div id="tableau-resultats"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("directeur");
+    if (contexte) {
+      initLayout({ role: "directeur", actif: "resultats", profile: contexte.profile });
+
+      const { data: classes, error } = await supabase
+        .from("classes").select("id, nom, niveaux(code)")
+        .eq("ecole_id", contexte.profile.ecole_id)
+        .order("nom");
+
+      const conteneur = document.getElementById("tableau-resultats");
+      if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; }
+      else if (!classes || classes.length === 0) {
+        conteneur.innerHTML = `<div class="vide">Aucune classe rattachée à cette école.</div>`;
+      } else {
+        const classeIds = classes.map(c => c.id);
+        const { data: inscriptions } = await supabase.from("classe_eleves").select("classe_id, eleve_id").in("classe_id", classeIds);
+        const eleveIds = [...new Set((inscriptions || []).map(i => i.eleve_id))];
+        const { data: tentatives } = eleveIds.length
+          ? await supabase.from("tentatives").select("eleve_id, score, score_max").in("eleve_id", eleveIds)
+          : { data: [] };
+
+        conteneur.innerHTML = `
+          <table class="tableau">
+            <thead><tr><th>Classe</th><th>Niveau</th><th>Élèves</th><th>Score moyen</th></tr></thead>
+            <tbody>
+              ${classes.map(c => {
+                const elevesDeClasse = (inscriptions || []).filter(i => i.classe_id === c.id).map(i => i.eleve_id);
+                const mesTentatives = (tentatives || []).filter(t => elevesDeClasse.includes(t.eleve_id));
+                const totalScore = mesTentatives.reduce((s, t) => s + Number(t.score), 0);
+                const totalMax = mesTentatives.reduce((s, t) => s + Number(t.score_max), 0);
+                const pct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : null;
+                return `
+                  <tr>
+                    <td><a href="/directeur/classe.html?id=${c.id}">${echapperHtml(c.nom)}</a></td>
+                    <td>${c.niveaux?.code || ""}</td>
+                    <td>${elevesDeClasse.length}</td>
+                    <td>${pct === null ? "—" : `${pct}%`}</td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>

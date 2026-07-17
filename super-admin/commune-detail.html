@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Détail commune — Super-Admin</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Super-Admin</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <div>
+          <h1 id="titre-commune" class="mb-0">Commune</h1>
+          <p class="texte-att mt-0" id="sous-titre-commune"></p>
+        </div>
+        <button class="bouton bouton-accent" id="bouton-agent">+ Créer un compte agent communal</button>
+      </div>
+
+      <div class="carte" id="carte-agent" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">Créer un compte Agent communal</h3>
+        <div id="alerte-agent"></div>
+        <form id="form-agent" class="formulaire" style="max-width:none;">
+          <div class="champ"><label for="agent-prenom">Prénom</label><input type="text" id="agent-prenom" required /></div>
+          <div class="champ"><label for="agent-nom">Nom</label><input type="text" id="agent-nom" required /></div>
+          <div class="champ"><label for="agent-email">Adresse e-mail</label><input type="email" id="agent-email" required /></div>
+          <button type="submit" class="bouton bouton-accent" id="bouton-creer-agent">Créer le compte</button>
+        </form>
+      </div>
+
+      <div class="carte" id="carte-identifiants-agent" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">🪪 Identifiants à transmettre à l'agent communal</h3>
+        <p>Notez ces informations avant de fermer — le mot de passe ne sera plus jamais affiché.</p>
+        <table class="tableau">
+          <tr><th>Email</th><td id="agent-identifiant-email"></td></tr>
+          <tr><th>Mot de passe temporaire</th><td id="agent-identifiant-mdp"></td></tr>
+        </table>
+      </div>
+
+      <div class="entete-page">
+        <h2 class="mb-0">Écoles de la commune</h2>
+        <button class="bouton bouton-primaire" id="bouton-nouvelle-ecole">+ Nouvelle école</button>
+      </div>
+
+      <div class="carte" id="carte-ecole" style="display:none; margin-bottom: 1.5rem;">
+        <div id="alerte-ecole"></div>
+        <form id="form-ecole" class="formulaire" style="max-width:none;">
+          <div class="champ"><label for="ecole-nom">Nom de l'école</label><input type="text" id="ecole-nom" required /></div>
+          <button type="submit" class="bouton bouton-primaire">Créer l'école</button>
+        </form>
+      </div>
+
+      <div id="liste-ecoles" class="grille"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, parametreUrl, afficherToast, genererCode } from "/js/ui.js";
+    import { supabase, creerClientJetable } from "/js/supabase-client.js";
+
+    const communeId = parametreUrl("id");
+    const contexte = await exigerRole("super_admin");
+    if (contexte && communeId) {
+      initLayout({ role: "super_admin", actif: "communes", profile: contexte.profile });
+
+      const { data: commune } = await supabase.from("communes").select("nom, departement").eq("id", communeId).single();
+      document.getElementById("titre-commune").textContent = commune?.nom || "Commune";
+      document.getElementById("sous-titre-commune").textContent = commune?.departement || "";
+
+      // ---- Créer un compte agent communal ----
+      const carteAgent = document.getElementById("carte-agent");
+      document.getElementById("bouton-agent").addEventListener("click", () => {
+        carteAgent.style.display = carteAgent.style.display === "none" ? "block" : "none";
+      });
+
+      document.getElementById("form-agent").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const bouton = document.getElementById("bouton-creer-agent");
+        bouton.disabled = true;
+        document.getElementById("alerte-agent").innerHTML = "";
+
+        const prenom = document.getElementById("agent-prenom").value.trim();
+        const nom = document.getElementById("agent-nom").value.trim();
+        const email = document.getElementById("agent-email").value.trim();
+        const motDePasse = genererCode(10);
+
+        const clientJetable = creerClientJetable();
+        const { data, error } = await clientJetable.auth.signUp({
+          email, password: motDePasse,
+          options: { data: { role: "agent_commune", prenom, nom, commune_id: communeId } },
+        });
+
+        bouton.disabled = false;
+        if (error || !data.user) {
+          document.getElementById("alerte-agent").innerHTML =
+            `<div class="alerte alerte-erreur">${error?.message || "Échec de la création du compte."}</div>`;
+          return;
+        }
+
+        document.getElementById("form-agent").reset();
+        document.getElementById("agent-identifiant-email").textContent = email;
+        document.getElementById("agent-identifiant-mdp").textContent = motDePasse;
+        document.getElementById("carte-identifiants-agent").style.display = "block";
+        afficherToast("Compte agent communal créé !", "succes");
+      });
+
+      // ---- Écoles ----
+      const carteEcole = document.getElementById("carte-ecole");
+      document.getElementById("bouton-nouvelle-ecole").addEventListener("click", () => {
+        carteEcole.style.display = carteEcole.style.display === "none" ? "block" : "none";
+      });
+
+      async function chargerEcoles() {
+        const liste = document.getElementById("liste-ecoles");
+        const { data: ecoles, error } = await supabase.from("ecoles").select("id, nom").eq("commune_id", communeId).order("nom");
+        if (error) { liste.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (!ecoles || ecoles.length === 0) {
+          liste.innerHTML = `<div class="vide">Aucune école dans cette commune.</div>`;
+          return;
+        }
+        liste.innerHTML = ecoles.map(e => `
+          <a class="carte carte-lien" href="/super-admin/ecole-detail.html?id=${e.id}">
+            <h3 class="mb-0">${echapperHtml(e.nom)}</h3>
+          </a>
+        `).join("");
+      }
+
+      document.getElementById("form-ecole").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nom = document.getElementById("ecole-nom").value.trim();
+        const { error } = await supabase.rpc("creer_ecole", { p_commune_id: communeId, p_nom: nom });
+        if (error) {
+          document.getElementById("alerte-ecole").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+          return;
+        }
+        document.getElementById("form-ecole").reset();
+        carteEcole.style.display = "none";
+        afficherToast("École créée !", "succes");
+        chargerEcoles();
+      });
+
+      chargerEcoles();
+    }
+  </script>
+</body>
+</html>

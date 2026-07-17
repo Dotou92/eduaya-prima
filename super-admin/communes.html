@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Communes & écoles — Super-Admin</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Super-Admin</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1>Communes</h1>
+        <button class="bouton bouton-primaire" id="bouton-nouvelle">+ Nouvelle commune</button>
+      </div>
+
+      <div class="carte" id="carte-formulaire" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">Créer une commune</h3>
+        <div id="alerte-zone"></div>
+        <form id="form-commune" class="formulaire" style="max-width:none;">
+          <div class="champ">
+            <label for="nom">Nom de la commune</label>
+            <input type="text" id="nom" required placeholder="ex : Adjohoun" />
+          </div>
+          <div class="champ">
+            <label for="departement">Département (optionnel)</label>
+            <input type="text" id="departement" placeholder="ex : Ouémé" />
+          </div>
+          <button type="submit" class="bouton bouton-primaire">Créer la commune</button>
+        </form>
+      </div>
+
+      <div id="liste-communes" class="grille"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, afficherToast } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("super_admin");
+    if (contexte) {
+      initLayout({ role: "super_admin", actif: "communes", profile: contexte.profile });
+
+      const carteFormulaire = document.getElementById("carte-formulaire");
+      document.getElementById("bouton-nouvelle").addEventListener("click", () => {
+        carteFormulaire.style.display = carteFormulaire.style.display === "none" ? "block" : "none";
+      });
+
+      async function chargerCommunes() {
+        const liste = document.getElementById("liste-communes");
+        const { data: communes, error } = await supabase.from("communes").select("id, nom, departement").order("nom");
+        if (error) { liste.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (!communes || communes.length === 0) {
+          liste.innerHTML = `<div class="vide">Aucune commune. Créez-en une avec le bouton ci-dessus.</div>`;
+          return;
+        }
+        liste.innerHTML = communes.map(c => `
+          <a class="carte carte-lien" href="/super-admin/commune-detail.html?id=${c.id}">
+            <h3 class="mb-0">${echapperHtml(c.nom)}</h3>
+            <p class="mb-0 texte-att">${echapperHtml(c.departement || "")}</p>
+          </a>
+        `).join("");
+      }
+
+      document.getElementById("form-commune").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nom = document.getElementById("nom").value.trim();
+        const departement = document.getElementById("departement").value.trim() || null;
+        const { error } = await supabase.rpc("creer_commune", { p_nom: nom, p_departement: departement });
+        if (error) {
+          document.getElementById("alerte-zone").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+          return;
+        }
+        document.getElementById("form-commune").reset();
+        carteFormulaire.style.display = "none";
+        afficherToast("Commune créée !", "succes");
+        chargerCommunes();
+      });
+
+      chargerCommunes();
+    }
+  </script>
+</body>
+</html>

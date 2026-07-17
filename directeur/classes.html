@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Classes de l'école — Espace Directeur</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Directeur</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <h1>Classes de l'école</h1>
+      <div id="liste-classes" class="grille"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("directeur");
+    if (contexte) {
+      initLayout({ role: "directeur", actif: "classes", profile: contexte.profile });
+
+      const { data: classes, error } = await supabase
+        .from("classes").select("id, nom, annee_scolaire, niveaux(code)")
+        .eq("ecole_id", contexte.profile.ecole_id)
+        .order("nom");
+
+      const liste = document.getElementById("liste-classes");
+      if (error) { liste.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; }
+      else if (!classes || classes.length === 0) {
+        liste.innerHTML = `<div class="vide">Aucune classe rattachée à cette école pour l'instant.</div>`;
+      } else {
+        liste.innerHTML = classes.map(c => `
+          <a class="carte carte-lien" href="/directeur/classe.html?id=${c.id}">
+            <span class="pastille pastille-vert">${c.niveaux?.code || ""}</span>
+            <h3>${echapperHtml(c.nom)}</h3>
+            <p class="mb-0 texte-att">${echapperHtml(c.annee_scolaire || "")}</p>
+          </a>
+        `).join("");
+      }
+    }
+  </script>
+</body>
+</html>

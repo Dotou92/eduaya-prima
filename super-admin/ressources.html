@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gérer les ressources — Super-Admin</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="bandeau-hors-ligne" class="bandeau-hors-ligne">Vous êtes hors connexion.</div>
+  <div class="app-topbar">
+    <div class="app-nav__marque">🎓 Super-Admin</div>
+    <div id="app-topbar-liens" class="app-topbar__liens"></div>
+  </div>
+  <div class="app-layout">
+    <nav class="app-nav" id="app-nav"></nav>
+    <main class="app-main">
+      <div class="entete-page">
+        <h1>Gérer les ressources UNESCO / partenaires</h1>
+        <button class="bouton bouton-primaire" id="bouton-nouvelle">+ Nouvelle ressource</button>
+      </div>
+
+      <div class="carte" id="carte-formulaire" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">Ajouter une ressource</h3>
+        <div id="alerte-zone"></div>
+        <form id="form-ressource" class="formulaire" style="max-width:none;">
+          <div class="champ">
+            <label for="titre">Titre</label>
+            <input type="text" id="titre" required />
+          </div>
+          <div class="champ">
+            <label for="description">Description (optionnel)</label>
+            <textarea id="description" rows="2"></textarea>
+          </div>
+          <div class="flex gap-2">
+            <div class="champ" style="flex:1;">
+              <label for="source">Source</label>
+              <select id="source">
+                <option value="UNESCO">UNESCO</option>
+                <option value="UNICEF">UNICEF</option>
+                <option value="Ministere">Ministère</option>
+                <option value="Partenaire">Partenaire</option>
+              </select>
+            </div>
+            <div class="champ" style="flex:1;">
+              <label for="categorie">Catégorie</label>
+              <select id="categorie">
+                <option value="guide">Guide</option>
+                <option value="rapport">Rapport</option>
+                <option value="recherche">Recherche</option>
+                <option value="recommandation">Recommandation</option>
+                <option value="formation">Formation</option>
+              </select>
+            </div>
+          </div>
+          <div class="champ">
+            <label for="lien">Lien (URL du document)</label>
+            <input type="url" id="lien" required placeholder="https://..." />
+          </div>
+          <button type="submit" class="bouton bouton-primaire">Publier la ressource</button>
+        </form>
+      </div>
+
+      <div id="liste-ressources"><p class="texte-att">Chargement…</p></div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { exigerRole } from "/js/auth.js";
+    import { initLayout, echapperHtml, afficherToast, formaterDate } from "/js/ui.js";
+    import { supabase } from "/js/supabase-client.js";
+
+    const contexte = await exigerRole("super_admin");
+    if (contexte) {
+      initLayout({ role: "super_admin", actif: "ressources-gestion", profile: contexte.profile });
+
+      const carteFormulaire = document.getElementById("carte-formulaire");
+      document.getElementById("bouton-nouvelle").addEventListener("click", () => {
+        carteFormulaire.style.display = carteFormulaire.style.display === "none" ? "block" : "none";
+      });
+
+      async function chargerRessources() {
+        const conteneur = document.getElementById("liste-ressources");
+        const { data: ressources, error } = await supabase
+          .from("ressources").select("*").order("created_at", { ascending: false });
+        if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (!ressources || ressources.length === 0) {
+          conteneur.innerHTML = `<div class="vide">Aucune ressource publiée.</div>`;
+          return;
+        }
+        conteneur.innerHTML = ressources.map(r => `
+          <div class="carte flex items-center justify-between" style="margin-bottom:0.75rem;">
+            <div>
+              <span class="pastille pastille-vert">${echapperHtml(r.source)}</span>
+              <span class="pastille pastille-gris">${echapperHtml(r.categorie || "")}</span>
+              <h3 class="mb-0">${echapperHtml(r.titre)}</h3>
+              <p class="mb-0 texte-att">${formaterDate(r.created_at)} — <a href="${r.lien_url}" target="_blank" rel="noopener">Voir le document</a></p>
+            </div>
+            <button class="bouton bouton-contour bouton-supprimer" data-id="${r.id}">Supprimer</button>
+          </div>
+        `).join("");
+        conteneur.querySelectorAll(".bouton-supprimer").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            if (!confirm("Supprimer cette ressource ?")) return;
+            await supabase.from("ressources").delete().eq("id", btn.dataset.id);
+            chargerRessources();
+          });
+        });
+      }
+
+      document.getElementById("form-ressource").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const titre = document.getElementById("titre").value.trim();
+        const description = document.getElementById("description").value.trim() || null;
+        const source = document.getElementById("source").value;
+        const categorie = document.getElementById("categorie").value;
+        const lien_url = document.getElementById("lien").value.trim();
+
+        const { error } = await supabase.from("ressources").insert({
+          titre, description, source, categorie, lien_url, publie_par: contexte.user.id,
+        });
+
+        if (error) {
+          document.getElementById("alerte-zone").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+          return;
+        }
+        document.getElementById("form-ressource").reset();
+        carteFormulaire.style.display = "none";
+        afficherToast("Ressource publiée !", "succes");
+        chargerRessources();
+      });
+
+      chargerRessources();
+    }
+  </script>
+</body>
+</html>
