@@ -36,14 +36,10 @@
       ]);
     }
 
-    alert("Etape 1 : le script a demarre.");
-
     let contexte;
     try {
       contexte = await avecDelai(exigerRole("agent_commune"), 8000, "vérification du compte");
-      alert("Etape 2 : exigerRole a repondu. contexte = " + JSON.stringify(contexte));
     } catch (e) {
-      alert("Etape 2 (erreur) : " + e.message);
       document.getElementById("liste-ecoles").innerHTML = `<div class="alerte alerte-erreur">${e.message}</div>`;
       contexte = null;
     }
