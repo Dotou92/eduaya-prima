@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connexion en cours — EduAya Prima</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main class="conteneur-etroit texte-centre" style="padding: 4rem 0;">
+    <div class="texte-centre" style="margin-bottom: 1.5rem;">
+      <span style="font-weight: 800; font-size: 1.2rem;">🎓 EduAya Prima</span>
+    </div>
+    <div id="zone" class="carte">
+      <span class="chargement"></span> Connexion en cours…
+    </div>
+  </main>
+
+  <script type="module">
+    import { supabase } from "/js/supabase-client.js";
+    import { TABLEAUX_DE_BORD } from "/js/auth.js";
+
+    const roleVoulu = new URLSearchParams(window.location.search).get("role"); // 'enseignant' | 'parent' | null
+    const zone = document.getElementById("zone");
+
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      window.location.href = "/auth/login.html";
+    } else {
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", session.user.id).single();
+
+      if (profile?.role === "non_defini" && (roleVoulu === "enseignant" || roleVoulu === "parent")) {
+        const { error } = await supabase.from("profiles").update({ role: roleVoulu }).eq("id", session.user.id);
+        if (error) {
+          zone.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+        } else {
+          window.location.href = TABLEAUX_DE_BORD[roleVoulu];
+        }
+      } else if (profile?.role === "non_defini") {
+        zone.innerHTML = `
+          <p>Choisis ton profil pour continuer :</p>
+          <div class="flex gap-1" style="justify-content:center;">
+            <button class="bouton bouton-primaire" id="choix-enseignant">Je suis enseignant(e)</button>
+            <button class="bouton bouton-accent" id="choix-parent">Je suis parent</button>
+          </div>
+        `;
+        const choisir = async (role) => {
+          const { error } = await supabase.from("profiles").update({ role }).eq("id", session.user.id);
+          if (!error) window.location.href = TABLEAUX_DE_BORD[role];
+        };
+        document.getElementById("choix-enseignant").addEventListener("click", () => choisir("enseignant"));
+        document.getElementById("choix-parent").addEventListener("click", () => choisir("parent"));
+      } else {
+        window.location.href = TABLEAUX_DE_BORD[profile?.role] || "/";
+      }
+    }
+  </script>
+</body>
+</html>

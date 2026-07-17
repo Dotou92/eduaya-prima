@@ -22,18 +22,19 @@
       </div>
 
       <div class="carte" id="carte-formulaire" style="display:none; margin-bottom: 1.5rem;">
-        <h3 class="mt-0">Créer une commune</h3>
+        <h3 class="mt-0">Créer une ou plusieurs communes</h3>
         <div id="alerte-zone"></div>
         <form id="form-commune" class="formulaire" style="max-width:none;">
           <div class="champ">
-            <label for="nom">Nom de la commune</label>
-            <input type="text" id="nom" required placeholder="ex : Adjohoun" />
+            <label for="noms">Nom(s) de commune — un par ligne</label>
+            <textarea id="noms" rows="5" required placeholder="Adjohoun&#10;Bonou&#10;Dangbo"></textarea>
+            <small>Colle une liste depuis un tableur : une commune par ligne, toutes rattachées au même département ci-dessous.</small>
           </div>
           <div class="champ">
-            <label for="departement">Département (optionnel)</label>
+            <label for="departement">Département (optionnel, s'applique à toute la liste)</label>
             <input type="text" id="departement" placeholder="ex : Ouémé" />
           </div>
-          <button type="submit" class="bouton bouton-primaire">Créer la commune</button>
+          <button type="submit" class="bouton bouton-primaire" id="bouton-envoyer-communes">Créer la/les commune(s)</button>
         </form>
       </div>
 
@@ -73,16 +74,35 @@
 
       document.getElementById("form-commune").addEventListener("submit", async (e) => {
         e.preventDefault();
-        const nom = document.getElementById("nom").value.trim();
+        const bouton = document.getElementById("bouton-envoyer-communes");
+        const noms = document.getElementById("noms").value.split("\n").map(n => n.trim()).filter(Boolean);
         const departement = document.getElementById("departement").value.trim() || null;
-        const { error } = await supabase.rpc("creer_commune", { p_nom: nom, p_departement: departement });
-        if (error) {
-          document.getElementById("alerte-zone").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
-          return;
+        const alerteZone = document.getElementById("alerte-zone");
+        alerteZone.innerHTML = "";
+
+        if (noms.length === 0) return;
+        bouton.disabled = true;
+        bouton.textContent = `Création… (0/${noms.length})`;
+
+        let reussies = 0;
+        const echecs = [];
+        for (let i = 0; i < noms.length; i++) {
+          const { error } = await supabase.rpc("creer_commune", { p_nom: noms[i], p_departement: departement });
+          if (error) echecs.push(`${noms[i]} : ${error.message}`);
+          else reussies++;
+          bouton.textContent = `Création… (${i + 1}/${noms.length})`;
         }
-        document.getElementById("form-commune").reset();
-        carteFormulaire.style.display = "none";
-        afficherToast("Commune créée !", "succes");
+
+        bouton.disabled = false;
+        bouton.textContent = "Créer la/les commune(s)";
+
+        if (echecs.length) {
+          alerteZone.innerHTML = `<div class="alerte alerte-erreur">${reussies} créée(s), ${echecs.length} échec(s) :<br>${echecs.map(echapperHtml).join("<br>")}</div>`;
+        } else {
+          document.getElementById("form-commune").reset();
+          carteFormulaire.style.display = "none";
+          afficherToast(`${reussies} commune(s) créée(s) !`, "succes");
+        }
         chargerCommunes();
       });
 

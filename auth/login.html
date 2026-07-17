@@ -35,6 +35,13 @@
         <button type="submit" class="bouton bouton-primaire bouton-bloc bouton-grand" id="bouton-connexion-adulte">Se connecter</button>
       </form>
 
+      <div id="zone-google-adulte" class="flex items-center gap-1" style="margin: 1.25rem 0; color: var(--couleur-texte-att); font-size: 0.85rem;">
+        <div style="flex:1; height:1px; background:var(--couleur-bordure);"></div>
+        ou
+        <div style="flex:1; height:1px; background:var(--couleur-bordure);"></div>
+      </div>
+      <button type="button" class="bouton bouton-contour bouton-bloc" id="bouton-google" style="display:none;">🔵 Continuer avec Google</button>
+
       <form id="form-eleve" class="formulaire" style="max-width:none; display:none;">
         <div class="champ">
           <label for="identifiant">Identifiant</label>
@@ -77,10 +84,20 @@
       const estAdulte = cible === "adulte";
       formAdulte.style.display = estAdulte ? "block" : "none";
       formEleve.style.display = estAdulte ? "none" : "block";
+      document.getElementById("zone-google-adulte").style.display = estAdulte ? "flex" : "none";
+      document.getElementById("bouton-google").style.display = estAdulte ? "inline-flex" : "none";
       ongletAdulte.className = `bouton ${estAdulte ? "bouton-primaire" : "bouton-contour"}`;
       ongletEleve.className = `bouton ${estAdulte ? "bouton-contour" : "bouton-primaire"}`;
       alerteZone.innerHTML = "";
     }
+    basculerOnglet("adulte");
+
+    document.getElementById("bouton-google").addEventListener("click", async () => {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/oauth-callback.html` },
+      });
+    });
 
     function afficherErreur(message) {
       alerteZone.innerHTML = `<div class="alerte alerte-erreur">${message}</div>`;

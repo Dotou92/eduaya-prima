@@ -52,8 +52,12 @@
       <div class="carte" id="carte-ecole" style="display:none; margin-bottom: 1.5rem;">
         <div id="alerte-ecole"></div>
         <form id="form-ecole" class="formulaire" style="max-width:none;">
-          <div class="champ"><label for="ecole-nom">Nom de l'école</label><input type="text" id="ecole-nom" required /></div>
-          <button type="submit" class="bouton bouton-primaire">Créer l'école</button>
+          <div class="champ">
+            <label for="ecole-noms">Nom(s) d'école — un(e) par ligne</label>
+            <textarea id="ecole-noms" rows="5" required placeholder="EPP Centre&#10;EPP Nord&#10;EPP Sud"></textarea>
+            <small>Colle une liste depuis un tableur : une école par ligne, toutes rattachées à cette commune.</small>
+          </div>
+          <button type="submit" class="bouton bouton-primaire" id="bouton-envoyer-ecoles">Créer la/les école(s)</button>
         </form>
       </div>
 
@@ -135,15 +139,34 @@
 
       document.getElementById("form-ecole").addEventListener("submit", async (e) => {
         e.preventDefault();
-        const nom = document.getElementById("ecole-nom").value.trim();
-        const { error } = await supabase.rpc("creer_ecole", { p_commune_id: communeId, p_nom: nom });
-        if (error) {
-          document.getElementById("alerte-ecole").innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
-          return;
+        const bouton = document.getElementById("bouton-envoyer-ecoles");
+        const noms = document.getElementById("ecole-noms").value.split("\n").map(n => n.trim()).filter(Boolean);
+        const alerteEcole = document.getElementById("alerte-ecole");
+        alerteEcole.innerHTML = "";
+
+        if (noms.length === 0) return;
+        bouton.disabled = true;
+        bouton.textContent = `Création… (0/${noms.length})`;
+
+        let reussies = 0;
+        const echecs = [];
+        for (let i = 0; i < noms.length; i++) {
+          const { error } = await supabase.rpc("creer_ecole", { p_commune_id: communeId, p_nom: noms[i] });
+          if (error) echecs.push(`${noms[i]} : ${error.message}`);
+          else reussies++;
+          bouton.textContent = `Création… (${i + 1}/${noms.length})`;
         }
-        document.getElementById("form-ecole").reset();
-        carteEcole.style.display = "none";
-        afficherToast("École créée !", "succes");
+
+        bouton.disabled = false;
+        bouton.textContent = "Créer la/les école(s)";
+
+        if (echecs.length) {
+          alerteEcole.innerHTML = `<div class="alerte alerte-erreur">${reussies} créée(s), ${echecs.length} échec(s) :<br>${echecs.map(echapperHtml).join("<br>")}</div>`;
+        } else {
+          document.getElementById("form-ecole").reset();
+          carteEcole.style.display = "none";
+          afficherToast(`${reussies} école(s) créée(s) !`, "succes");
+        }
         chargerEcoles();
       });
 
