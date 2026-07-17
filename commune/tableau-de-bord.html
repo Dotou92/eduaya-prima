@@ -29,7 +29,21 @@
     import { initLayout, echapperHtml } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
 
-    const contexte = await exigerRole("agent_commune");
+    function avecDelai(promesse, ms, etiquette) {
+      return Promise.race([
+        promesse,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Délai dépassé (${etiquette}) — la requête n'a jamais répondu.`)), ms)),
+      ]);
+    }
+
+    let contexte;
+    try {
+      contexte = await avecDelai(exigerRole("agent_commune"), 8000, "vérification du compte");
+    } catch (e) {
+      document.getElementById("liste-ecoles").innerHTML = `<div class="alerte alerte-erreur">${e.message}</div>`;
+      contexte = null;
+    }
+
     if (contexte) {
       initLayout({ role: "agent_commune", actif: "tableau-de-bord", profile: contexte.profile });
       document.getElementById("titre-bienvenue").textContent = `Bonjour ${contexte.profile.prenom} 👋`;
@@ -42,11 +56,15 @@
           return;
         }
 
-        const { data: commune, error: erreurCommune } = await supabase.from("communes").select("nom").eq("id", communeId).single();
+        const { data: commune, error: erreurCommune } = await avecDelai(
+          supabase.from("communes").select("nom").eq("id", communeId).single(), 8000, "chargement de la commune"
+        );
         if (erreurCommune) console.error("Erreur chargement commune :", erreurCommune);
         document.getElementById("nom-commune").textContent = commune?.nom || "";
 
-        const { data: ecoles, error } = await supabase.from("ecoles").select("id, nom").eq("commune_id", communeId).order("nom");
+        const { data: ecoles, error } = await avecDelai(
+          supabase.from("ecoles").select("id, nom").eq("commune_id", communeId).order("nom"), 8000, "chargement des écoles"
+        );
         if (error) { liste.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
         if (!ecoles || ecoles.length === 0) {
           liste.innerHTML = `<div class="vide">Aucune école dans cette commune pour l'instant.</div>`;
