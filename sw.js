@@ -2,8 +2,13 @@
 // fonctionnement hors-ligne. Les requêtes vers Supabase (autre origine) ne sont jamais
 // interceptées ici — le cache des leçons/exercices se fait explicitement via IndexedDB
 // (voir js/offline-db.js et js/content-cache.js), pas via ce cache HTTP générique.
+//
+// IMPORTANT : incrémenter CACHE_NAME à chaque modification de ce fichier force les
+// navigateurs à réinstaller le service worker (sinon, tant que ce fichier ne change
+// pas d'un seul octet, l'ancien service worker et son cache restent actifs indéfiniment
+// — c'est ce qui a provoqué du JS périmé pendant plusieurs déploiements).
 
-const CACHE_NAME = "ecole-benin-v1";
+const CACHE_NAME = "ecole-benin-v2";
 
 const URLS_PRECACHEES = [
   "/",
@@ -15,10 +20,13 @@ const URLS_PRECACHEES = [
   "/js/supabase-client.js",
   "/js/auth.js",
   "/js/ui.js",
+  "/js/icons.js",
+  "/js/charts.js",
   "/js/exercises.js",
   "/js/offline-db.js",
   "/js/sync-engine.js",
   "/js/content-cache.js",
+  "/js/reference-data.js",
   "/icons/icon.svg",
 ];
 
@@ -57,18 +65,17 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Stale-while-revalidate pour les fichiers statiques (CSS/JS/icônes).
+  // Réseau en priorité pour les fichiers statiques (CSS/JS/icônes) : le code doit
+  // toujours être à jour pour un utilisateur en ligne. Le cache ne sert que de secours
+  // hors-ligne, jamais de version "pas trop vieille" servie par défaut.
   event.respondWith(
-    caches.match(request).then((reponseCache) => {
-      const misAJour = fetch(request)
-        .then((reponseReseau) => {
-          if (reponseReseau && reponseReseau.ok) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, reponseReseau.clone()));
-          }
-          return reponseReseau;
-        })
-        .catch(() => reponseCache);
-      return reponseCache || misAJour;
-    })
+    fetch(request)
+      .then((reponseReseau) => {
+        if (reponseReseau && reponseReseau.ok) {
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, reponseReseau.clone()));
+        }
+        return reponseReseau;
+      })
+      .catch(() => caches.match(request))
   );
 });
