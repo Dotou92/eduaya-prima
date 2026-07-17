@@ -139,6 +139,7 @@
           <div class="carte" style="margin-bottom:1rem;">
             <h3 class="mt-0">${echapperHtml(ens.prenom || "Enseignant(e)")} — ${echapperHtml(ens.classeNom)}</h3>
             <div id="fil-messages-${idx}" style="margin-bottom:0.75rem;"></div>
+            <div id="alerte-message-${idx}"></div>
             <form class="form-message" data-enseignant-id="${ens.id}" style="display:flex; gap:0.5rem;">
               <input type="text" placeholder="Écrire un message…" required style="flex:1; padding:0.6rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);" />
               <button type="submit" class="bouton bouton-primaire">Envoyer</button>
@@ -162,19 +163,27 @@
             : `<p class="texte-att">Aucun message pour l'instant.</p>`;
         }
 
-        document.querySelectorAll(".form-message").forEach(form => {
+        document.querySelectorAll(".form-message").forEach((form, idx) => {
           form.addEventListener("submit", async (e) => {
             e.preventDefault();
             const input = form.querySelector("input");
+            const bouton = form.querySelector("button");
             const contenu = input.value.trim();
             if (!contenu) return;
+            bouton.disabled = true;
             const { error } = await supabase.from("messages").insert({
               expediteur_id: contexte.user.id,
               destinataire_id: form.dataset.enseignantId,
               eleve_id: enfantId,
               contenu,
             });
-            if (!error) { input.value = ""; window.location.reload(); }
+            bouton.disabled = false;
+            if (error) {
+              document.getElementById(`alerte-message-${idx}`).innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`;
+              return;
+            }
+            input.value = "";
+            window.location.reload();
           });
         });
       }

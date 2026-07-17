@@ -16,14 +16,30 @@
   <div class="app-layout">
     <nav class="app-nav" id="app-nav"></nav>
     <main class="app-main">
-      <h1>Messages des parents</h1>
+      <div class="entete-page">
+        <h1>Messages</h1>
+        <button class="bouton bouton-primaire" id="bouton-nouveau">+ Nouveau message</button>
+      </div>
+
+      <div class="carte" id="carte-nouveau" style="display:none; margin-bottom: 1.5rem;">
+        <h3 class="mt-0">Écrire à un parent</h3>
+        <div id="alerte-nouveau"></div>
+        <form id="form-nouveau" class="formulaire" style="max-width:none;">
+          <div class="champ">
+            <label for="select-eleve">Élève</label>
+            <select id="select-eleve" required><option value="">— choisir —</option></select>
+          </div>
+          <div id="zone-parents" class="texte-att">Choisis d'abord un élève.</div>
+        </form>
+      </div>
+
       <div id="liste-conversations"><p class="texte-att">Chargement…</p></div>
     </main>
   </div>
 
   <script type="module">
     import { exigerRole } from "/js/auth.js";
-    import { initLayout, echapperHtml, formaterDate } from "/js/ui.js";
+    import { initLayout, echapperHtml, formaterDate, afficherToast } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
 
     const contexte = await exigerRole("enseignant");
@@ -33,6 +49,72 @@
       const moi = contexte.user.id;
       const conteneur = document.getElementById("liste-conversations");
 
+      // ---- Nouveau message : choisir un élève, puis un parent lié ----
+      const carteNouveau = document.getElementById("carte-nouveau");
+      document.getElementById("bouton-nouveau").addEventListener("click", () => {
+        carteNouveau.style.display = carteNouveau.style.display === "none" ? "block" : "none";
+      });
+
+      const { data: classes } = await supabase.from("classes").select("id, nom").eq("enseignant_id", moi);
+      const classeIds = (classes || []).map(c => c.id);
+      const { data: inscriptions } = classeIds.length
+        ? await supabase.from("classe_eleves").select("eleve_id, profiles(prenom)").in("classe_id", classeIds)
+        : { data: [] };
+
+      const selectEleve = document.getElementById("select-eleve");
+      (inscriptions || []).forEach(i => selectEleve.insertAdjacentHTML(
+        "beforeend", `<option value="${i.eleve_id}">${echapperHtml(i.profiles?.prenom || "Élève")}</option>`
+      ));
+
+      selectEleve.addEventListener("change", async () => {
+        const zoneParents = document.getElementById("zone-parents");
+        const eleveId = selectEleve.value;
+        if (!eleveId) { zoneParents.textContent = "Choisis d'abord un élève."; return; }
+        zoneParents.textContent = "Chargement…";
+
+        const { data: liens, error } = await supabase
+          .from("parent_enfant").select("parent_id, profiles!parent_enfant_parent_id_fkey(prenom)").eq("enfant_id", eleveId);
+
+        if (error) { zoneParents.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (!liens || liens.length === 0) {
+          zoneParents.innerHTML = `<p class="texte-att">Aucun parent lié à cet élève pour l'instant.</p>`;
+          return;
+        }
+
+        zoneParents.innerHTML = liens.map(l => `
+          <div class="champ">
+            <label>À : ${echapperHtml(l.profiles?.prenom || "Parent")}</label>
+            <div style="display:flex; gap:0.5rem;">
+              <input type="text" class="champ-nouveau-message" placeholder="Écrire un message…" style="flex:1; padding:0.6rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);" />
+              <button type="button" class="bouton bouton-primaire bouton-envoyer-nouveau" data-parent-id="${l.parent_id}" data-eleve-id="${eleveId}">Envoyer</button>
+            </div>
+          </div>
+        `).join("");
+
+        zoneParents.querySelectorAll(".bouton-envoyer-nouveau").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const input = btn.previousElementSibling;
+            const contenu = input.value.trim();
+            if (!contenu) return;
+            btn.disabled = true;
+            const { error: erreurEnvoi } = await supabase.from("messages").insert({
+              expediteur_id: moi, destinataire_id: btn.dataset.parentId, eleve_id: btn.dataset.eleveId, contenu,
+            });
+            btn.disabled = false;
+            if (erreurEnvoi) {
+              document.getElementById("alerte-nouveau").innerHTML = `<div class="alerte alerte-erreur">${erreurEnvoi.message}</div>`;
+              return;
+            }
+            afficherToast("Message envoyé !", "succes");
+            carteNouveau.style.display = "none";
+            document.getElementById("form-nouveau").reset();
+            zoneParents.textContent = "Choisis d'abord un élève.";
+            chargerConversations();
+          });
+        });
+      });
+
+      // ---- Conversations existantes ----
       async function chargerConversations() {
         const { data: messages, error } = await supabase
           .from("messages")
@@ -47,7 +129,7 @@
 
         if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
         if (!messages || messages.length === 0) {
-          conteneur.innerHTML = `<div class="vide">Aucun message pour l'instant.</div>`;
+          conteneur.innerHTML = `<div class="vide">Aucun message pour l'instant. Utilise "+ Nouveau message" pour écrire à un parent.</div>`;
           return;
         }
 
@@ -71,7 +153,8 @@
                 <span class="texte-att">(${formaterDate(m.created_at)})</span> — ${echapperHtml(m.contenu)}</p>
               `).join("")}
             </div>
-            <form class="form-reponse" data-autre-id="${conv.autreId}" data-eleve-id="${conv.elevesId}" style="display:flex; gap:0.5rem;">
+            <div id="alerte-reponse-${idx}"></div>
+            <form class="form-reponse" data-idx="${idx}" data-autre-id="${conv.autreId}" data-eleve-id="${conv.elevesId}" style="display:flex; gap:0.5rem;">
               <input type="text" placeholder="Répondre…" required style="flex:1; padding:0.6rem 0.8rem; border-radius:8px; border:1.5px solid var(--couleur-bordure);" />
               <button type="submit" class="bouton bouton-primaire">Envoyer</button>
             </form>
@@ -82,15 +165,23 @@
           form.addEventListener("submit", async (e) => {
             e.preventDefault();
             const input = form.querySelector("input");
+            const bouton = form.querySelector("button");
             const contenu = input.value.trim();
             if (!contenu) return;
+            bouton.disabled = true;
             const { error: erreurEnvoi } = await supabase.from("messages").insert({
               expediteur_id: moi,
               destinataire_id: form.dataset.autreId,
               eleve_id: form.dataset.eleveId,
               contenu,
             });
-            if (!erreurEnvoi) { input.value = ""; chargerConversations(); }
+            bouton.disabled = false;
+            if (erreurEnvoi) {
+              document.getElementById(`alerte-reponse-${form.dataset.idx}`).innerHTML = `<div class="alerte alerte-erreur">${erreurEnvoi.message}</div>`;
+              return;
+            }
+            input.value = "";
+            chargerConversations();
           });
         });
       }
