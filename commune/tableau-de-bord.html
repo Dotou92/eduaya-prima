@@ -34,44 +34,55 @@
       initLayout({ role: "agent_commune", actif: "tableau-de-bord", profile: contexte.profile });
       document.getElementById("titre-bienvenue").textContent = `Bonjour ${contexte.profile.prenom} 👋`;
 
-      const communeId = contexte.profile.commune_id;
-      const { data: commune } = await supabase.from("communes").select("nom").eq("id", communeId).single();
-      document.getElementById("nom-commune").textContent = commune?.nom || "";
-
-      const { data: ecoles, error } = await supabase.from("ecoles").select("id, nom").eq("commune_id", communeId).order("nom");
       const liste = document.getElementById("liste-ecoles");
-      if (error) { liste.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
-      if (!ecoles || ecoles.length === 0) {
-        liste.innerHTML = `<div class="vide">Aucune école dans cette commune pour l'instant.</div>`;
-        return;
+      try {
+        const communeId = contexte.profile.commune_id;
+        if (!communeId) {
+          liste.innerHTML = `<div class="alerte alerte-erreur">Ce compte agent communal n'a pas de commune associée (commune_id manquant sur le profil). Il faut recréer le compte depuis Super-Admin en choisissant bien une commune.</div>`;
+          return;
+        }
+
+        const { data: commune, error: erreurCommune } = await supabase.from("communes").select("nom").eq("id", communeId).single();
+        if (erreurCommune) console.error("Erreur chargement commune :", erreurCommune);
+        document.getElementById("nom-commune").textContent = commune?.nom || "";
+
+        const { data: ecoles, error } = await supabase.from("ecoles").select("id, nom").eq("commune_id", communeId).order("nom");
+        if (error) { liste.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; return; }
+        if (!ecoles || ecoles.length === 0) {
+          liste.innerHTML = `<div class="vide">Aucune école dans cette commune pour l'instant.</div>`;
+          return;
+        }
+
+        const ecoleIds = ecoles.map(e => e.id);
+        const { data: classes } = await supabase.from("classes").select("id, ecole_id").in("ecole_id", ecoleIds);
+        const classeIds = (classes || []).map(c => c.id);
+        const { data: inscriptions } = classeIds.length
+          ? await supabase.from("classe_eleves").select("classe_id, eleve_id").in("classe_id", classeIds)
+          : { data: [] };
+        const eleveIds = [...new Set((inscriptions || []).map(i => i.eleve_id))];
+        const { data: tentatives } = eleveIds.length
+          ? await supabase.from("tentatives").select("eleve_id, score, score_max").in("eleve_id", eleveIds)
+          : { data: [] };
+
+        liste.innerHTML = ecoles.map(e => {
+          const classesDeLEcole = (classes || []).filter(c => c.ecole_id === e.id).map(c => c.id);
+          const elevesDeLEcole = (inscriptions || []).filter(i => classesDeLEcole.includes(i.classe_id)).map(i => i.eleve_id);
+          const idsUniques = [...new Set(elevesDeLEcole)];
+          const mesTentatives = (tentatives || []).filter(t => idsUniques.includes(t.eleve_id));
+          const totalScore = mesTentatives.reduce((s, t) => s + Number(t.score), 0);
+          const totalMax = mesTentatives.reduce((s, t) => s + Number(t.score_max), 0);
+          const pct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : null;
+          return `
+            <a class="carte carte-lien" href="/commune/ecole.html?id=${e.id}">
+              <h3 class="mb-0">${echapperHtml(e.nom)}</h3>
+              <p class="mb-0 texte-att">${idsUniques.length} élève(s) — ${pct === null ? "pas encore de résultats" : `${pct}% de réussite`}</p>
+            </a>
+          `;
+        }).join("");
+      } catch (e) {
+        console.error("Erreur inattendue :", e);
+        liste.innerHTML = `<div class="alerte alerte-erreur">Erreur inattendue : ${e.message}</div>`;
       }
-
-      const ecoleIds = ecoles.map(e => e.id);
-      const { data: classes } = await supabase.from("classes").select("id, ecole_id").in("ecole_id", ecoleIds);
-      const classeIds = (classes || []).map(c => c.id);
-      const { data: inscriptions } = classeIds.length
-        ? await supabase.from("classe_eleves").select("classe_id, eleve_id").in("classe_id", classeIds)
-        : { data: [] };
-      const eleveIds = [...new Set((inscriptions || []).map(i => i.eleve_id))];
-      const { data: tentatives } = eleveIds.length
-        ? await supabase.from("tentatives").select("eleve_id, score, score_max").in("eleve_id", eleveIds)
-        : { data: [] };
-
-      liste.innerHTML = ecoles.map(e => {
-        const classesDeLEcole = (classes || []).filter(c => c.ecole_id === e.id).map(c => c.id);
-        const elevesDeLEcole = (inscriptions || []).filter(i => classesDeLEcole.includes(i.classe_id)).map(i => i.eleve_id);
-        const idsUniques = [...new Set(elevesDeLEcole)];
-        const mesTentatives = (tentatives || []).filter(t => idsUniques.includes(t.eleve_id));
-        const totalScore = mesTentatives.reduce((s, t) => s + Number(t.score), 0);
-        const totalMax = mesTentatives.reduce((s, t) => s + Number(t.score_max), 0);
-        const pct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : null;
-        return `
-          <a class="carte carte-lien" href="/commune/ecole.html?id=${e.id}">
-            <h3 class="mb-0">${echapperHtml(e.nom)}</h3>
-            <p class="mb-0 texte-att">${idsUniques.length} élève(s) — ${pct === null ? "pas encore de résultats" : `${pct}% de réussite`}</p>
-          </a>
-        `;
-      }).join("");
     }
   </script>
 </body>
