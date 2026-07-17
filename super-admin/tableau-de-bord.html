@@ -22,25 +22,25 @@
       </div>
 
       <div class="grille">
-        <div class="carte">
-          <div class="texte-att">Communes</div>
-          <h2 id="stat-communes" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-communes"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-communes">—</div><div class="carte-stat__label">Communes</div></div>
         </div>
-        <div class="carte">
-          <div class="texte-att">Écoles</div>
-          <h2 id="stat-ecoles" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-ecoles"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-ecoles">—</div><div class="carte-stat__label">Écoles</div></div>
         </div>
-        <div class="carte">
-          <div class="texte-att">Directeurs</div>
-          <h2 id="stat-directeurs" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-directeurs"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-directeurs">—</div><div class="carte-stat__label">Directeurs</div></div>
         </div>
-        <div class="carte">
-          <div class="texte-att">Agents communaux</div>
-          <h2 id="stat-agents" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-agents"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-agents">—</div><div class="carte-stat__label">Agents communaux</div></div>
         </div>
-        <div class="carte">
-          <div class="texte-att">Ressources publiées</div>
-          <h2 id="stat-ressources" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-ressources"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-ressources">—</div><div class="carte-stat__label">Ressources publiées</div></div>
         </div>
       </div>
     </main>
@@ -50,11 +50,17 @@
     import { exigerRole } from "/js/auth.js";
     import { initLayout } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
+    import { icone } from "/js/icons.js";
 
     const contexte = await exigerRole("super_admin");
     if (contexte) {
       initLayout({ role: "super_admin", actif: "tableau-de-bord", profile: contexte.profile });
       document.getElementById("titre-bienvenue").textContent = `Bonjour ${contexte.profile.prenom} 👋`;
+      document.getElementById("icone-communes").innerHTML = icone("batiment", 22);
+      document.getElementById("icone-ecoles").innerHTML = icone("ecole", 22);
+      document.getElementById("icone-directeurs").innerHTML = icone("personnes", 22);
+      document.getElementById("icone-agents").innerHTML = icone("personnes", 22);
+      document.getElementById("icone-ressources").innerHTML = icone("globe", 22);
 
       const [
         { count: nbCommunes },

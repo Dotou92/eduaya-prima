@@ -17,6 +17,7 @@
     <nav class="app-nav" id="app-nav"></nav>
     <main class="app-main">
       <h1>Résultats par classe</h1>
+      <div id="graphique-comparaison" class="carte" style="margin-bottom: 1.5rem;"><p class="texte-att">Chargement…</p></div>
       <div id="tableau-resultats"><p class="texte-att">Chargement…</p></div>
     </main>
   </div>
@@ -25,6 +26,7 @@
     import { exigerRole } from "/js/auth.js";
     import { initLayout, echapperHtml } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
+    import { graphiqueBarres } from "/js/charts.js";
 
     const contexte = await exigerRole("directeur");
     if (contexte) {
@@ -36,9 +38,11 @@
         .order("nom");
 
       const conteneur = document.getElementById("tableau-resultats");
-      if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; }
+      const conteneurGraphique = document.getElementById("graphique-comparaison");
+      if (error) { conteneur.innerHTML = `<div class="alerte alerte-erreur">${error.message}</div>`; conteneurGraphique.style.display = "none"; }
       else if (!classes || classes.length === 0) {
         conteneur.innerHTML = `<div class="vide">Aucune classe rattachée à cette école.</div>`;
+        conteneurGraphique.style.display = "none";
       } else {
         const classeIds = classes.map(c => c.id);
         const { data: inscriptions } = await supabase.from("classe_eleves").select("classe_id, eleve_id").in("classe_id", classeIds);
@@ -47,27 +51,34 @@
           ? await supabase.from("tentatives").select("eleve_id, score, score_max").in("eleve_id", eleveIds)
           : { data: [] };
 
+        const lignes = classes.map(c => {
+          const elevesDeClasse = (inscriptions || []).filter(i => i.classe_id === c.id).map(i => i.eleve_id);
+          const mesTentatives = (tentatives || []).filter(t => elevesDeClasse.includes(t.eleve_id));
+          const totalScore = mesTentatives.reduce((s, t) => s + Number(t.score), 0);
+          const totalMax = mesTentatives.reduce((s, t) => s + Number(t.score_max), 0);
+          const pct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : null;
+          return { classe: c, nbEleves: elevesDeClasse.length, pct };
+        });
+
+        conteneurGraphique.innerHTML = `<h3 class="mt-0">Comparaison des classes</h3><div id="graphique-inner"></div>`;
+        graphiqueBarres(document.getElementById("graphique-inner"), lignes.map(l => ({ label: l.classe.nom, valeur: l.pct })));
+
         conteneur.innerHTML = `
+          <div class="tableau-scroll">
           <table class="tableau">
             <thead><tr><th>Classe</th><th>Niveau</th><th>Élèves</th><th>Score moyen</th></tr></thead>
             <tbody>
-              ${classes.map(c => {
-                const elevesDeClasse = (inscriptions || []).filter(i => i.classe_id === c.id).map(i => i.eleve_id);
-                const mesTentatives = (tentatives || []).filter(t => elevesDeClasse.includes(t.eleve_id));
-                const totalScore = mesTentatives.reduce((s, t) => s + Number(t.score), 0);
-                const totalMax = mesTentatives.reduce((s, t) => s + Number(t.score_max), 0);
-                const pct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : null;
-                return `
-                  <tr>
-                    <td><a href="/directeur/classe.html?id=${c.id}">${echapperHtml(c.nom)}</a></td>
-                    <td>${c.niveaux?.code || ""}</td>
-                    <td>${elevesDeClasse.length}</td>
-                    <td>${pct === null ? "—" : `${pct}%`}</td>
-                  </tr>
-                `;
-              }).join("")}
+              ${lignes.map(l => `
+                <tr>
+                  <td><a href="/directeur/classe.html?id=${l.classe.id}">${echapperHtml(l.classe.nom)}</a></td>
+                  <td>${l.classe.niveaux?.code || ""}</td>
+                  <td>${l.nbEleves}</td>
+                  <td>${l.pct === null ? "—" : `${l.pct}%`}</td>
+                </tr>
+              `).join("")}
             </tbody>
           </table>
+          </div>
         `;
       }
     }

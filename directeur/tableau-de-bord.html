@@ -24,21 +24,21 @@
       </div>
 
       <div class="grille">
-        <div class="carte">
-          <div class="texte-att">Classes</div>
-          <h2 id="stat-classes" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-classes"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-classes">—</div><div class="carte-stat__label">Classes</div></div>
         </div>
-        <div class="carte">
-          <div class="texte-att">Enseignants</div>
-          <h2 id="stat-enseignants" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-enseignants"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-enseignants">—</div><div class="carte-stat__label">Enseignants</div></div>
         </div>
-        <div class="carte">
-          <div class="texte-att">Élèves</div>
-          <h2 id="stat-eleves" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-eleves"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-eleves">—</div><div class="carte-stat__label">Élèves</div></div>
         </div>
-        <div class="carte">
-          <div class="texte-att">Score moyen école</div>
-          <h2 id="stat-score" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-score"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-score">—</div><div class="carte-stat__label">Score moyen école</div></div>
         </div>
       </div>
     </main>
@@ -48,11 +48,16 @@
     import { exigerRole } from "/js/auth.js";
     import { initLayout } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
+    import { icone } from "/js/icons.js";
 
     const contexte = await exigerRole("directeur");
     if (contexte) {
       initLayout({ role: "directeur", actif: "tableau-de-bord", profile: contexte.profile });
       document.getElementById("titre-bienvenue").textContent = `Bonjour ${contexte.profile.prenom} 👋`;
+      document.getElementById("icone-classes").innerHTML = icone("ecole", 22);
+      document.getElementById("icone-enseignants").innerHTML = icone("personnes", 22);
+      document.getElementById("icone-eleves").innerHTML = icone("personnes", 22);
+      document.getElementById("icone-score").innerHTML = icone("graphique", 22);
 
       const ecoleId = contexte.profile.ecole_id;
       const { data: ecole } = await supabase.from("ecoles").select("nom").eq("id", ecoleId).single();

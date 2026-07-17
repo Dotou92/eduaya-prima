@@ -21,17 +21,17 @@
       </div>
 
       <div class="grille" style="margin-bottom: 2rem;">
-        <div class="carte">
-          <div class="texte-att">Classes</div>
-          <h2 id="stat-classes" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-classes"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-classes">—</div><div class="carte-stat__label">Classes</div></div>
         </div>
-        <div class="carte">
-          <div class="texte-att">Élèves suivis</div>
-          <h2 id="stat-eleves" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-eleves"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-eleves">—</div><div class="carte-stat__label">Élèves suivis</div></div>
         </div>
-        <div class="carte">
-          <div class="texte-att">Leçons créées</div>
-          <h2 id="stat-lecons" class="mt-0 mb-0">—</h2>
+        <div class="carte carte-stat">
+          <div class="carte-stat__icone" id="icone-lecons"></div>
+          <div class="carte-stat__corps"><div class="carte-stat__valeur" id="stat-lecons">—</div><div class="carte-stat__label">Leçons créées</div></div>
         </div>
       </div>
 
@@ -47,11 +47,15 @@
     import { exigerRole } from "/js/auth.js";
     import { initLayout, echapperHtml } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
+    import { icone } from "/js/icons.js";
 
     const contexte = await exigerRole("enseignant");
     if (contexte) {
       initLayout({ role: "enseignant", actif: "tableau-de-bord", profile: contexte.profile });
       document.getElementById("titre-bienvenue").textContent = `Bonjour ${contexte.profile.prenom} 👋`;
+      document.getElementById("icone-classes").innerHTML = icone("ecole", 22);
+      document.getElementById("icone-eleves").innerHTML = icone("personnes", 22);
+      document.getElementById("icone-lecons").innerHTML = icone("livre", 22);
 
       const { data: classes } = await supabase.from("classes").select("id, nom, niveau_id, code_invitation").eq("enseignant_id", contexte.user.id);
       const { count: nbEleves } = await supabase

@@ -19,6 +19,7 @@
       <div class="entete-page">
         <h1 id="titre">Résultats de la classe</h1>
       </div>
+      <div id="graphique-comparaison" class="carte" style="margin-bottom: 1.5rem;"><p class="texte-att">Chargement…</p></div>
       <div id="tableau-resultats"><p class="texte-att">Chargement…</p></div>
     </main>
   </div>
@@ -27,6 +28,7 @@
     import { exigerRole } from "/js/auth.js";
     import { initLayout, echapperHtml, parametreUrl } from "/js/ui.js";
     import { supabase } from "/js/supabase-client.js";
+    import { graphiqueBarres } from "/js/charts.js";
 
     const classeId = parametreUrl("classe");
     const contexte = await exigerRole("enseignant");
@@ -42,8 +44,10 @@
       const eleveIds = eleves.map(i => i.eleve_id);
 
       const conteneur = document.getElementById("tableau-resultats");
+      const conteneurGraphique = document.getElementById("graphique-comparaison");
       if (eleveIds.length === 0) {
         conteneur.innerHTML = `<div class="vide">Aucun élève dans cette classe.</div>`;
+        conteneurGraphique.style.display = "none";
       } else {
         const [{ data: tentatives }, { data: progres }] = await Promise.all([
           supabase.from("tentatives").select("eleve_id, score, score_max").in("eleve_id", eleveIds),
@@ -60,7 +64,11 @@
           return { prenom: profiles?.prenom || "—", nbTentatives, pourcentage, leconsTerminees };
         });
 
+        conteneurGraphique.innerHTML = `<h3 class="mt-0">Comparaison des élèves</h3><div id="graphique-inner"></div>`;
+        graphiqueBarres(document.getElementById("graphique-inner"), lignes.map(l => ({ label: l.prenom, valeur: l.pourcentage })));
+
         conteneur.innerHTML = `
+          <div class="tableau-scroll">
           <table class="tableau">
             <thead><tr><th>Élève</th><th>Exercices faits</th><th>Score moyen</th><th>Leçons terminées</th></tr></thead>
             <tbody>
@@ -68,16 +76,13 @@
                 <tr>
                   <td>${echapperHtml(l.prenom)}</td>
                   <td>${l.nbTentatives}</td>
-                  <td>${l.pourcentage === null ? "—" : `
-                    <div class="flex items-center gap-1">
-                      <div class="barre-progres" style="width:80px;"><div class="barre-progres__valeur" style="width:${l.pourcentage}%;"></div></div>
-                      ${l.pourcentage}%
-                    </div>`}</td>
+                  <td>${l.pourcentage === null ? "—" : `${l.pourcentage}%`}</td>
                   <td>${l.leconsTerminees}</td>
                 </tr>
               `).join("")}
             </tbody>
           </table>
+          </div>
         `;
       }
     }

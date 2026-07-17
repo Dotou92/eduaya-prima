@@ -153,6 +153,7 @@
             L'identifiant et le code parent restent visibles ici en permanence. Le code secret, lui,
             n'est jamais réaffiché après sa création (par sécurité) — utilisez "Code secret perdu ?" pour en générer un nouveau.
           </p>
+          <div class="tableau-scroll">
           <table class="tableau">
             <thead><tr><th>Prénom</th><th>Identifiant</th><th>Ajouté le</th><th>Code parent</th><th></th></tr></thead>
             <tbody>
@@ -167,6 +168,7 @@
               `).join("")}
             </tbody>
           </table>
+          </div>
         `;
         conteneur.querySelectorAll(".bouton-reinit-pin").forEach(btn => {
           btn.addEventListener("click", async () => {

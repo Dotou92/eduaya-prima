@@ -1,6 +1,7 @@
 // Aides d'interface partagées : notifications, navigation par rôle, bandeau hors-ligne.
 import { deconnexion, initialesDe } from "./auth.js";
 import { demarrerSynchronisationAutomatique } from "./sync-engine.js";
+import { icone, logoMarque } from "./icons.js";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -10,36 +11,36 @@ if ("serviceWorker" in navigator) {
 
 const LIENS_PAR_ROLE = {
   ecolier: [
-    { href: "/ecolier/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "🏠" },
-    { href: "/ecolier/progres.html", id: "progres", label: "Mes progrès", icone: "📈" },
-    { href: "/ecolier/badges.html", id: "badges", label: "Mes badges", icone: "🏅" },
+    { href: "/ecolier/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "accueil" },
+    { href: "/ecolier/progres.html", id: "progres", label: "Mes progrès", icone: "graphique" },
+    { href: "/ecolier/badges.html", id: "badges", label: "Mes badges", icone: "medaille" },
   ],
   parent: [
-    { href: "/parent/tableau-de-bord.html", id: "tableau-de-bord", label: "Mes enfants", icone: "🏠" },
-    { href: "/parent/lier-enfant.html", id: "lier-enfant", label: "Lier un enfant", icone: "🔗" },
+    { href: "/parent/tableau-de-bord.html", id: "tableau-de-bord", label: "Mes enfants", icone: "accueil" },
+    { href: "/parent/lier-enfant.html", id: "lier-enfant", label: "Lier un enfant", icone: "lien" },
   ],
   enseignant: [
-    { href: "/enseignant/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "🏠" },
-    { href: "/enseignant/classes.html", id: "classes", label: "Mes classes", icone: "🏫" },
-    { href: "/enseignant/lecons.html", id: "lecons", label: "Leçons", icone: "📘" },
-    { href: "/enseignant/devoirs.html", id: "devoirs", label: "Devoirs", icone: "📝" },
-    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "🌍" },
+    { href: "/enseignant/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "accueil" },
+    { href: "/enseignant/classes.html", id: "classes", label: "Mes classes", icone: "ecole" },
+    { href: "/enseignant/lecons.html", id: "lecons", label: "Leçons", icone: "livre" },
+    { href: "/enseignant/devoirs.html", id: "devoirs", label: "Devoirs", icone: "carnet" },
+    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "globe" },
   ],
   directeur: [
-    { href: "/directeur/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "🏠" },
-    { href: "/directeur/classes.html", id: "classes", label: "Classes de l'école", icone: "🏫" },
-    { href: "/directeur/resultats.html", id: "resultats", label: "Résultats", icone: "📊" },
-    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "🌍" },
+    { href: "/directeur/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "accueil" },
+    { href: "/directeur/classes.html", id: "classes", label: "Classes de l'école", icone: "ecole" },
+    { href: "/directeur/resultats.html", id: "resultats", label: "Résultats", icone: "graphique" },
+    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "globe" },
   ],
   agent_commune: [
-    { href: "/commune/tableau-de-bord.html", id: "tableau-de-bord", label: "Écoles de la commune", icone: "🏠" },
-    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "🌍" },
+    { href: "/commune/tableau-de-bord.html", id: "tableau-de-bord", label: "Écoles de la commune", icone: "accueil" },
+    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "globe" },
   ],
   super_admin: [
-    { href: "/super-admin/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "🏠" },
-    { href: "/super-admin/communes.html", id: "communes", label: "Communes & écoles", icone: "🏛️" },
-    { href: "/super-admin/ressources.html", id: "ressources-gestion", label: "Gérer les ressources", icone: "🌍" },
-    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "📚" },
+    { href: "/super-admin/tableau-de-bord.html", id: "tableau-de-bord", label: "Accueil", icone: "accueil" },
+    { href: "/super-admin/communes.html", id: "communes", label: "Communes & écoles", icone: "batiment" },
+    { href: "/super-admin/ressources.html", id: "ressources-gestion", label: "Gérer les ressources", icone: "reglages" },
+    { href: "/ressources/liste.html", id: "ressources", label: "Ressources UNESCO", icone: "globe" },
   ],
 };
 
@@ -63,17 +64,17 @@ export function initLayout({ role, actif, profile }) {
 
   if (nav) {
     nav.innerHTML = `
-      <div class="app-nav__marque">🎓 ${NOMS_ESPACE[role]}</div>
-      ${liens.map(l => `<a class="app-nav__lien${l.id === actif ? " actif" : ""}" href="${l.href}"><span>${l.icone}</span><span>${l.label}</span></a>`).join("")}
+      <div class="app-nav__marque">${logoMarque(24)} ${NOMS_ESPACE[role]}</div>
+      ${liens.map(l => `<a class="app-nav__lien${l.id === actif ? " actif" : ""}" href="${l.href}">${icone(l.icone)}<span>${l.label}</span></a>`).join("")}
       <div class="app-nav__bas">
         ${profile ? `<div class="flex items-center gap-1"><span class="avatar-rond">${initialesDe(profile.prenom, profile.nom)}</span><span>${profile.prenom || ""}</span></div>` : ""}
-        <button class="bouton bouton-contour bouton-bloc" id="bouton-deconnexion">Se déconnecter</button>
+        <button class="bouton bouton-contour bouton-bloc" id="bouton-deconnexion">${icone("deconnexion", 16)} Se déconnecter</button>
       </div>
     `;
   }
   if (topbar) {
-    topbar.innerHTML = liens.map(l => `<a class="${l.id === actif ? "actif" : ""}" href="${l.href}">${l.icone}</a>`).join("")
-      + `<a href="#" id="bouton-deconnexion-mobile">🚪</a>`;
+    topbar.innerHTML = liens.map(l => `<a class="${l.id === actif ? "actif" : ""}" href="${l.href}">${icone(l.icone)}</a>`).join("")
+      + `<a href="#" id="bouton-deconnexion-mobile">${icone("deconnexion")}</a>`;
   }
 
   document.getElementById("bouton-deconnexion")?.addEventListener("click", deconnexion);

@@ -86,6 +86,7 @@
       const conteneurRecents = document.getElementById("derniers-exercices");
       const recents = (tentatives || []).slice(0, 10);
       conteneurRecents.innerHTML = recents.length ? `
+        <div class="tableau-scroll">
         <table class="tableau">
           <thead><tr><th>Exercice</th><th>Date</th><th>Score</th></tr></thead>
           <tbody>
@@ -98,6 +99,7 @@
             `).join("")}
           </tbody>
         </table>
+        </div>
       ` : `<div class="vide">Aucun exercice fait pour l'instant.</div>`;
     }
   </script>

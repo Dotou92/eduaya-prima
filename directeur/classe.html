@@ -52,6 +52,7 @@
       const { data: tentatives } = await supabase.from("tentatives").select("eleve_id, score, score_max").in("eleve_id", eleveIds);
 
       conteneur.innerHTML = `
+        <div class="tableau-scroll">
         <table class="tableau">
           <thead><tr><th>Prénom</th><th>Exercices faits</th><th>Score moyen</th></tr></thead>
           <tbody>
@@ -70,6 +71,7 @@
             }).join("")}
           </tbody>
         </table>
+        </div>
       `;
     }
   </script>
